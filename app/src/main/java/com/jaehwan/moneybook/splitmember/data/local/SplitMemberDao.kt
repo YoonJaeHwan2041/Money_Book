@@ -8,7 +8,7 @@ import androidx.room.Query
 import androidx.room.Update
 
 @Dao
-interface SplitMemeber {
+interface SplitMemberDao {
 
     @Query("SELECT * FROM split_member WHERE transaction_id = :transactionId")
     fun getMemberByTransactionId(transactionId: String): List<SplitMemberEntity>
