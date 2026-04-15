@@ -42,19 +42,29 @@ import com.jaehwan.moneybook.category.data.local.CategoryEntity
 import com.jaehwan.moneybook.category.ui.CategoryFormDialog
 import com.jaehwan.moneybook.category.ui.CategoryList
 import com.jaehwan.moneybook.category.ui.CategoryViewModel
-import com.jaehwan.moneybook.transaction.ui.LedgerPlaceholderScreen
+import com.jaehwan.moneybook.transaction.data.local.TransactionEntity
+import com.jaehwan.moneybook.transaction.ui.LedgerScreen
+import com.jaehwan.moneybook.transaction.ui.LedgerViewModel
+import com.jaehwan.moneybook.transaction.ui.TransactionFormDialog
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
+    val ledgerViewModel: LedgerViewModel = hiltViewModel()
     val categories by viewModel.categories.collectAsState()
+    val ledgerRows by ledgerViewModel.ledgerRows.collectAsState()
+
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var destination by remember { mutableStateOf(MainDestination.Category) }
     var showCategoryForm by remember { mutableStateOf(false) }
     var categoryBeingEdited by remember { mutableStateOf<CategoryEntity?>(null) }
     var categoryPendingDelete by remember { mutableStateOf<CategoryEntity?>(null) }
+
+    var showTransactionForm by remember { mutableStateOf(false) }
+    var transactionBeingEdited by remember { mutableStateOf<TransactionEntity?>(null) }
+    var transactionPendingDelete by remember { mutableStateOf<TransactionEntity?>(null) }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -124,14 +134,26 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                 )
             },
             floatingActionButton = {
-                if (destination == MainDestination.Category) {
-                    FloatingActionButton(
-                        onClick = {
-                            categoryBeingEdited = null
-                            showCategoryForm = true
+                when (destination) {
+                    MainDestination.Category -> {
+                        FloatingActionButton(
+                            onClick = {
+                                categoryBeingEdited = null
+                                showCategoryForm = true
+                            }
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "카테고리 추가")
                         }
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "카테고리 추가")
+                    }
+                    MainDestination.Ledger -> {
+                        FloatingActionButton(
+                            onClick = {
+                                transactionBeingEdited = null
+                                showTransactionForm = true
+                            }
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "거래 추가")
+                        }
                     }
                 }
             }
@@ -154,7 +176,19 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                             }
                         )
                     }
-                    MainDestination.Ledger -> LedgerPlaceholderScreen()
+                    MainDestination.Ledger -> {
+                        LedgerScreen(
+                            rows = ledgerRows,
+                            categoriesEmpty = categories.isEmpty(),
+                            onEdit = { tx ->
+                                transactionBeingEdited = tx
+                                showTransactionForm = true
+                            },
+                            onDeleteRequest = { tx ->
+                                transactionPendingDelete = tx
+                            }
+                        )
+                    }
                 }
 
                 if (showCategoryForm) {
@@ -183,6 +217,26 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                     )
                 }
 
+                if (showTransactionForm) {
+                    TransactionFormDialog(
+                        initial = transactionBeingEdited,
+                        categories = categories,
+                        onDismiss = {
+                            showTransactionForm = false
+                            transactionBeingEdited = null
+                        },
+                        onConfirm = { entity ->
+                            if (entity.id == 0L) {
+                                ledgerViewModel.insertTransaction(entity)
+                            } else {
+                                ledgerViewModel.updateTransaction(entity)
+                            }
+                            showTransactionForm = false
+                            transactionBeingEdited = null
+                        }
+                    )
+                }
+
                 categoryPendingDelete?.let { toDelete ->
                     AlertDialog(
                         onDismissRequest = { categoryPendingDelete = null },
@@ -205,6 +259,29 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                         },
                         dismissButton = {
                             TextButton(onClick = { categoryPendingDelete = null }) {
+                                Text("취소")
+                            }
+                        }
+                    )
+                }
+
+                transactionPendingDelete?.let { toDelete ->
+                    AlertDialog(
+                        onDismissRequest = { transactionPendingDelete = null },
+                        title = { Text("거래 삭제") },
+                        text = { Text("이 거래를 삭제할까요?") },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    ledgerViewModel.deleteTransaction(toDelete)
+                                    transactionPendingDelete = null
+                                }
+                            ) {
+                                Text("삭제")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { transactionPendingDelete = null }) {
                                 Text("취소")
                             }
                         }

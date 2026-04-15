@@ -15,7 +15,7 @@ import com.jaehwan.moneybook.transaction.data.local.TransactionEntity
         TransactionEntity::class,
         SplitMemberEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false // 테스트 용도가 아니라면 false로 둡니다.
 )
 abstract class AppDatabase : RoomDatabase() {

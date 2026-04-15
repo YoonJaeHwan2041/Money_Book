@@ -14,15 +14,15 @@ interface TransactionDao {
     @Query("SELECT * FROM `transaction` ORDER BY created_at DESC")
     fun getAllTransactions(): Flow<List<TransactionEntity>>
 
-    @Query("SELECT * FROM 'transaction' WHERE created_at BETWEEN :start AND :end ORDER BY created_at DESC")
+    @Query("SELECT * FROM `transaction` WHERE created_at BETWEEN :start AND :end ORDER BY created_at DESC")
     fun getTransactionsByPeriod(start: Long, end: Long): Flow<List<TransactionEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertTransaction(transaction: TransactionEntity)
+    suspend fun insertTransaction(transaction: TransactionEntity): Long
 
     @Update
-    suspend fun updatedTransaction(transaction: TransactionEntity)
+    suspend fun updateTransaction(transaction: TransactionEntity)
 
     @Delete
-    suspend fun deletedTransaction(transaction: TransactionEntity)
+    suspend fun deleteTransaction(transaction: TransactionEntity)
 }

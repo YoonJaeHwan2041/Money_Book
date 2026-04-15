@@ -11,10 +11,10 @@ import androidx.room.Update
 interface SplitMemberDao {
 
     @Query("SELECT * FROM split_member WHERE transaction_id = :transactionId")
-    fun getMemberByTransactionId(transactionId: String): List<SplitMemberEntity>
+    suspend fun getMembersByTransactionId(transactionId: Long): List<SplitMemberEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertMemebers(members: List<SplitMemberEntity>)
+    suspend fun insertMembers(members: List<SplitMemberEntity>)
 
     @Update
     suspend fun updateMember(member: SplitMemberEntity)

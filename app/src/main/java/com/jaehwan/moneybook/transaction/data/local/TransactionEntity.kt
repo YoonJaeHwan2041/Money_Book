@@ -42,7 +42,7 @@ data class TransactionEntity(
     val hasAlarm: Boolean,
 
     @ColumnInfo(name = "memo")
-    val memo: String,
+    val memo: String? = null,
 
     @ColumnInfo(name = "created_at")
     val createdAt: Long = System.currentTimeMillis(),
