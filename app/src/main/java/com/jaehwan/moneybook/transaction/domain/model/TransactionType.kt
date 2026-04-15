@@ -5,7 +5,7 @@ enum class TransactionType(val key: String, val label: String) {
     EXPENSE("EXPENSE", "지출"),
     FIXED_INCOME("FIXED_INCOME", "고정 수입"),
     FIXED_EXPENSE("FIXED_EXPENSE", "고정 지출"),
-    SPLIT("SPLIT", "뿜빠이(정산)"),
+    SPLIT("SPLIT", "뿜빠이"),
     ;
 
     val isFixed: Boolean

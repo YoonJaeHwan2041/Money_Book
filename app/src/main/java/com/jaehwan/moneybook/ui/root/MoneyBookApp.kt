@@ -42,7 +42,9 @@ import com.jaehwan.moneybook.category.data.local.CategoryEntity
 import com.jaehwan.moneybook.category.ui.CategoryFormDialog
 import com.jaehwan.moneybook.category.ui.CategoryList
 import com.jaehwan.moneybook.category.ui.CategoryViewModel
+import com.jaehwan.moneybook.splitmember.ui.SplitEditorScreen
 import com.jaehwan.moneybook.transaction.data.local.TransactionEntity
+import com.jaehwan.moneybook.transaction.domain.model.TransactionType
 import com.jaehwan.moneybook.transaction.ui.LedgerScreen
 import com.jaehwan.moneybook.transaction.ui.LedgerViewModel
 import com.jaehwan.moneybook.transaction.ui.TransactionFormDialog
@@ -65,6 +67,10 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
     var showTransactionForm by remember { mutableStateOf(false) }
     var transactionBeingEdited by remember { mutableStateOf<TransactionEntity?>(null) }
     var transactionPendingDelete by remember { mutableStateOf<TransactionEntity?>(null) }
+
+    var showSplitEditor by remember { mutableStateOf(false) }
+    var splitEditorTransaction by remember { mutableStateOf<TransactionEntity?>(null) }
+    var splitPrefill by remember { mutableStateOf<Triple<Int, Long, String?>?>(null) }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -181,12 +187,21 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                             rows = ledgerRows,
                             categoriesEmpty = categories.isEmpty(),
                             onEdit = { tx ->
-                                transactionBeingEdited = tx
-                                showTransactionForm = true
+                                if (TransactionType.fromKey(tx.type) == TransactionType.SPLIT) {
+                                    splitEditorTransaction = tx
+                                    splitPrefill = null
+                                    showSplitEditor = true
+                                } else {
+                                    transactionBeingEdited = tx
+                                    showTransactionForm = true
+                                }
                             },
                             onDeleteRequest = { tx ->
                                 transactionPendingDelete = tx
-                            }
+                            },
+                            onSplitMemberPaidToggle = { member ->
+                                ledgerViewModel.updateSplitMember(member)
+                            },
                         )
                     }
                 }
@@ -233,8 +248,45 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                             }
                             showTransactionForm = false
                             transactionBeingEdited = null
-                        }
+                        },
+                        onRequestSplitDetails = { amount, categoryId, memo ->
+                            splitPrefill = Triple(amount, categoryId, memo)
+                            splitEditorTransaction = null
+                            showSplitEditor = true
+                        },
                     )
+                }
+
+                if (showSplitEditor) {
+                    val initialTx = splitEditorTransaction
+                    val prefill = splitPrefill
+                    val total = initialTx?.amount ?: prefill?.first ?: 0
+                    val categoryId = initialTx?.categoryId ?: prefill?.second ?: 0L
+                    val memo = initialTx?.memo ?: prefill?.third
+                    if (total > 0 && categoryId != 0L) {
+                        SplitEditorScreen(
+                            initialTransaction = initialTx,
+                            prefilledTotal = total,
+                            prefilledCategoryId = categoryId,
+                            prefilledMemo = memo,
+                            ledgerViewModel = ledgerViewModel,
+                            onDismiss = {
+                                showSplitEditor = false
+                                splitEditorTransaction = null
+                                splitPrefill = null
+                            },
+                            onSave = { entity, members ->
+                                if (entity.id == 0L) {
+                                    ledgerViewModel.insertSplit(entity, members)
+                                } else {
+                                    ledgerViewModel.updateSplit(entity, members)
+                                }
+                                showSplitEditor = false
+                                splitEditorTransaction = null
+                                splitPrefill = null
+                            },
+                        )
+                    }
                 }
 
                 categoryPendingDelete?.let { toDelete ->

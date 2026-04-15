@@ -12,7 +12,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -25,15 +29,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.jaehwan.moneybook.category.data.local.CategoryEntity
+import com.jaehwan.moneybook.ui.focusScrollToVerticalBiasInViewport
 
 @Composable
 fun CategoryFormDialog(
@@ -59,18 +68,35 @@ fun CategoryFormDialog(
     val isEdit = initialCategory != null
     val dialogTitle = if (isEdit) "카테고리 수정" else "새 카테고리 추가"
     val confirmLabel = if (isEdit) "저장" else "추가"
+    val formScrollState = rememberScrollState()
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(dialogTitle) },
         text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            val maxBody = LocalConfiguration.current.screenHeightDp.dp * 0.88f
+            var formViewportCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+            val formScrollScope = rememberCoroutineScope()
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = maxBody)
+                    .imePadding()
+                    .verticalScroll(formScrollState)
+                    .onGloballyPositioned { formViewportCoords = it }
+            ) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("카테고리 이름") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusScrollToVerticalBiasInViewport(
+                            scrollState = formScrollState,
+                            viewportCoordinates = { formViewportCoords },
+                            coroutineScope = formScrollScope,
+                        )
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -99,7 +125,13 @@ fun CategoryFormDialog(
                             onValueChange = { if (it.length <= 2) emojiText = it },
                             label = { Text("이모지 1개 입력") },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusScrollToVerticalBiasInViewport(
+                                    scrollState = formScrollState,
+                                    viewportCoordinates = { formViewportCoords },
+                                    coroutineScope = formScrollScope,
+                                )
                         )
                     }
                     IconSelectionType.GALLERY -> {
