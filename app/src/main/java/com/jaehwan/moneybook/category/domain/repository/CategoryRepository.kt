@@ -9,6 +9,8 @@ interface CategoryRepository {
 
     suspend fun addCategory(name: String, iconKey: String?)
 
+    suspend fun ensureDefaultCategories()
+
     suspend fun updateCategory(category: CategoryEntity)
 
     suspend fun deleteCategory(category: CategoryEntity)

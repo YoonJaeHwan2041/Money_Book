@@ -44,6 +44,8 @@ import com.jaehwan.moneybook.transaction.domain.model.TransactionType
 import com.jaehwan.moneybook.transaction.ui.LedgerViewModel
 import com.jaehwan.moneybook.transaction.ui.startOfDayMillis
 import com.jaehwan.moneybook.ui.focusScrollToVerticalBiasInViewport
+import java.text.NumberFormat
+import java.util.Locale
 
 private data class MemberRowState(
     val name: String,
@@ -79,9 +81,9 @@ fun SplitEditorScreen(
             rowStates = loaded.map { m ->
                 MemberRowState(
                     name = m.memberName,
-                    extraText = m.extraAmount.toString(),
-                    deductionText = m.deductionAmount.toString(),
-                    agreedText = m.agreedAmount?.toString().orEmpty(),
+                    extraText = formatAmountInput(m.extraAmount.toString()),
+                    deductionText = formatAmountInput(m.deductionAmount.toString()),
+                    agreedText = m.agreedAmount?.let { formatAmountInput(it.toString()) }.orEmpty(),
                     useSuggested = m.agreedAmount == null,
                     memo = m.paymentMemo.orEmpty(),
                     isPrimary = m.isPrimaryPayer,
@@ -108,8 +110,8 @@ fun SplitEditorScreen(
     var memoTargetIndex by remember { mutableStateOf<Int?>(null) }
     var memoDraft by remember { mutableStateOf("") }
 
-    val extras = rowStates.map { it.extraText.toIntOrNull() ?: 0 }
-    val deductions = rowStates.map { it.deductionText.toIntOrNull() ?: 0 }
+    val extras = rowStates.map { parseAmountInput(it.extraText) ?: 0 }
+    val deductions = rowStates.map { parseAmountInput(it.deductionText) ?: 0 }
     val suggested = remember(total, memberCount, rowStates) {
         if (memberCount <= 0 || rowStates.size != memberCount) emptyList()
         else computeSuggestedShares(total, memberCount, extras, deductions, primaryIndex = 0)
@@ -148,7 +150,7 @@ fun SplitEditorScreen(
                                 )
                                 val members = rowStates.mapIndexed { index, r ->
                                     val sug = suggested.getOrElse(index) { 0 }
-                                    val agreed = if (r.useSuggested) sug else (r.agreedText.toIntOrNull() ?: sug)
+                                    val agreed = if (r.useSuggested) sug else (parseAmountInput(r.agreedText) ?: sug)
                                     SplitMemberEntity(
                                         id = 0,
                                         transactionId = 0,
@@ -156,8 +158,8 @@ fun SplitEditorScreen(
                                             if (index == 0) "본인" else "멤버${index + 1}"
                                         },
                                         isPrimaryPayer = index == 0,
-                                        extraAmount = r.extraText.toIntOrNull() ?: 0,
-                                        deductionAmount = r.deductionText.toIntOrNull() ?: 0,
+                                        extraAmount = parseAmountInput(r.extraText) ?: 0,
+                                        deductionAmount = parseAmountInput(r.deductionText) ?: 0,
                                         agreedAmount = agreed,
                                         isPaid = r.isPaid,
                                         paymentMemo = r.memo.trim().ifEmpty { null },
@@ -181,7 +183,7 @@ fun SplitEditorScreen(
                         .onGloballyPositioned { formViewportCoords = it }
                         .padding(16.dp)
                 ) {
-                    Text("총액 ${total}원", style = MaterialTheme.typography.titleMedium)
+                    Text("총액 ${formatAmountInput(total.toString())}원", style = MaterialTheme.typography.titleMedium)
                     Text(
                         "본인(맨 위)이 이미 총액을 결제했다는 전제로, 아래 인원에게 받을 금액을 나눕니다.",
                         style = MaterialTheme.typography.bodySmall,
@@ -227,7 +229,7 @@ fun SplitEditorScreen(
                                 value = row.extraText,
                                 onValueChange = { v ->
                                     rowStates = rowStates.mapIndexed { j, r ->
-                                        if (j == index) r.copy(extraText = v.filter { it.isDigit() }) else r
+                                        if (j == index) r.copy(extraText = formatAmountInput(v)) else r
                                     }
                                 },
                                 label = { Text("추가") },
@@ -244,7 +246,7 @@ fun SplitEditorScreen(
                                 value = row.deductionText,
                                 onValueChange = { v ->
                                     rowStates = rowStates.mapIndexed { j, r ->
-                                        if (j == index) r.copy(deductionText = v.filter { it.isDigit() }) else r
+                                        if (j == index) r.copy(deductionText = formatAmountInput(v)) else r
                                     }
                                 },
                                 label = { Text("차감") },
@@ -258,7 +260,7 @@ fun SplitEditorScreen(
                                     )
                             )
                         }
-                        Text("제안: ${sug}원", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                        Text("제안: ${formatAmountInput(sug.toString())}원", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Checkbox(
                                 checked = row.useSuggested,
@@ -267,7 +269,7 @@ fun SplitEditorScreen(
                                         if (j == index) {
                                             r.copy(
                                                 useSuggested = checked,
-                                                agreedText = if (checked) sug.toString() else r.agreedText
+                                                agreedText = if (checked) formatAmountInput(sug.toString()) else r.agreedText
                                             )
                                         } else r
                                     }
@@ -279,11 +281,11 @@ fun SplitEditorScreen(
                             value = row.agreedText,
                             onValueChange = { v ->
                                 rowStates = rowStates.mapIndexed { j, r ->
-                                    if (j == index) r.copy(agreedText = v.filter { it.isDigit() }) else r
+                                    if (j == index) r.copy(agreedText = formatAmountInput(v)) else r
                                 }
                             },
                             label = { Text("확정 금액") },
-                            placeholder = { Text("${sug}원") },
+                            placeholder = { Text("${formatAmountInput(sug.toString())}원") },
                             singleLine = true,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -348,4 +350,15 @@ fun SplitEditorScreen(
             }
         )
     }
+}
+
+private fun parseAmountInput(value: String): Int? =
+    value.replace(",", "").toIntOrNull()
+
+private fun formatAmountInput(value: String): String {
+    val digits = value.filter { it.isDigit() }
+    if (digits.isEmpty()) return ""
+    val normalized = digits.trimStart('0').ifEmpty { "0" }
+    val asLong = normalized.toLongOrNull() ?: return normalized
+    return NumberFormat.getNumberInstance(Locale.KOREA).format(asLong)
 }

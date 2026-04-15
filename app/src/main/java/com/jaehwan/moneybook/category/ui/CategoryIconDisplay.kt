@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.Image
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -12,6 +13,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 
@@ -46,17 +49,32 @@ fun CategoryIconDisplay(
                 }
                 iconKey.startsWith("res:") -> {
                     val resName = iconKey.substringAfter("res:")
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = resName.substringAfter("ic_").take(1).uppercase(),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                    val context = LocalContext.current
+                    val resId = context.resources.getIdentifier(
+                        resName,
+                        "drawable",
+                        context.packageName,
+                    )
+                    if (resId != 0) {
+                        Image(
+                            painter = painterResource(id = resId),
+                            contentDescription = "Category Resource Icon",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
                         )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = resName.substringAfter("ic_").take(1).uppercase(),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
                     }
                 }
                 else -> {

@@ -16,6 +16,21 @@ class CategoryRepositoryImpl @Inject constructor(
         categoryDao.insertCategory(CategoryEntity(name = name, iconKey = iconKey))
     }
 
+    override suspend fun ensureDefaultCategories() {
+        if (categoryDao.countCategories() > 0) return
+        categoryDao.insertCategories(
+            listOf(
+                CategoryEntity(name = "교통", iconKey = "res:transport", isDefault = true),
+                CategoryEntity(name = "유흥", iconKey = "res:entertainment", isDefault = true),
+                CategoryEntity(name = "편의점", iconKey = "res:convenience", isDefault = true),
+                CategoryEntity(name = "게임", iconKey = "res:game", isDefault = true),
+                CategoryEntity(name = "주거/공과금", iconKey = "res:utilities", isDefault = true),
+                CategoryEntity(name = "외식", iconKey = "res:food", isDefault = true),
+                CategoryEntity(name = "월급", iconKey = "res:give_money", isDefault = true),
+            )
+        )
+    }
+
     override suspend fun updateCategory(category: CategoryEntity) {
         categoryDao.updateCategory(
             category.copy(updatedAt = System.currentTimeMillis())

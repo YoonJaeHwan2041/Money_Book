@@ -15,6 +15,12 @@ import javax.inject.Inject
 class CategoryViewModel @Inject constructor(
     private val repository: CategoryRepository
 ) : ViewModel() {
+    init {
+        viewModelScope.launch {
+            repository.ensureDefaultCategories()
+        }
+    }
+
     val categories: StateFlow<List<CategoryEntity>> = repository.allCategories
         .stateIn(
             scope = viewModelScope,

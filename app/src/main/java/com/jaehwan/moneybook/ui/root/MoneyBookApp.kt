@@ -29,12 +29,14 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -48,6 +50,7 @@ import com.jaehwan.moneybook.transaction.domain.model.TransactionType
 import com.jaehwan.moneybook.transaction.ui.LedgerScreen
 import com.jaehwan.moneybook.transaction.ui.LedgerViewModel
 import com.jaehwan.moneybook.transaction.ui.TransactionFormDialog
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,10 +59,21 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
     val ledgerViewModel: LedgerViewModel = hiltViewModel()
     val categories by viewModel.categories.collectAsState()
     val ledgerRows by ledgerViewModel.ledgerRows.collectAsState()
+    var showSplash by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        delay(1000)
+        showSplash = false
+    }
+
+    if (showSplash) {
+        SplashScreen()
+        return
+    }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    var destination by remember { mutableStateOf(MainDestination.Category) }
+    var destination by remember { mutableStateOf(MainDestination.Ledger) }
     var showCategoryForm by remember { mutableStateOf(false) }
     var categoryBeingEdited by remember { mutableStateOf<CategoryEntity?>(null) }
     var categoryPendingDelete by remember { mutableStateOf<CategoryEntity?>(null) }
@@ -341,5 +355,19 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SplashScreen() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "가계부",
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
     }
 }
