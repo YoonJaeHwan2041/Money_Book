@@ -6,5 +6,6 @@ import com.jaehwan.moneybook.transaction.data.local.TransactionEntity
 data class LedgerRow(
     val transaction: TransactionEntity,
     val categoryName: String,
+    val categoryIconKey: String? = null,
     val splitMembers: List<SplitMemberEntity> = emptyList(),
 )

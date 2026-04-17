@@ -22,4 +22,6 @@ interface TransactionRepository {
     suspend fun updateSplit(transaction: TransactionEntity, members: List<SplitMemberEntity>)
 
     suspend fun updateSplitMember(member: SplitMemberEntity)
+
+    suspend fun ensureMarchDemoTransactions()
 }

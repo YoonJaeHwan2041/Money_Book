@@ -1,6 +1,7 @@
 package com.jaehwan.moneybook.transaction.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,9 +13,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -26,6 +29,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -34,16 +38,16 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.jaehwan.moneybook.category.ui.CategoryIconDisplay
 import com.jaehwan.moneybook.splitmember.data.local.SplitMemberEntity
 import com.jaehwan.moneybook.transaction.data.local.TransactionEntity
 import com.jaehwan.moneybook.transaction.domain.model.TransactionType
 import java.text.NumberFormat
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.format.TextStyle
-import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 
 @Composable
@@ -53,6 +57,10 @@ fun LedgerScreen(
     onEdit: (TransactionEntity) -> Unit,
     onDeleteRequest: (TransactionEntity) -> Unit,
     onSplitMemberPaidToggle: (SplitMemberEntity) -> Unit,
+    onOpenDetail: (LedgerRow) -> Unit,
+    showActionButtons: Boolean = false,
+    allowInlineSplitExpand: Boolean = false,
+    onViewAll: () -> Unit = {},
 ) {
     if (categoriesEmpty) {
         Column(
@@ -90,9 +98,14 @@ fun LedgerScreen(
         return
     }
 
-    val now = LocalDate.now()
-    val startOfMonth = now.withDayOfMonth(1)
-    val endOfMonth = now.with(TemporalAdjusters.lastDayOfMonth())
+    val pivotEpoch = rows.maxOfOrNull { it.transaction.expectedDate } ?: System.currentTimeMillis()
+    val pivotDate = Instant.ofEpochMilli(pivotEpoch).atZone(ZoneId.systemDefault()).toLocalDate()
+    var selectedMonth by remember {
+        mutableStateOf(YearMonth.of(pivotDate.year, pivotDate.month))
+    }
+    var showMonthPicker by rememberSaveable { mutableStateOf(false) }
+    val startOfMonth = selectedMonth.atDay(1)
+    val endOfMonth = selectedMonth.atEndOfMonth()
     val monthlyRows = rows.filter { row ->
         val d = Instant.ofEpochMilli(row.transaction.expectedDate)
             .atZone(ZoneId.systemDefault())
@@ -120,14 +133,27 @@ fun LedgerScreen(
             t == TransactionType.EXPENSE || t == TransactionType.SPLIT ||
                 (t == TransactionType.FIXED_EXPENSE && it.transaction.isConfirmed)
         }
-        .groupBy { it.categoryName }
-        .mapValues { (_, list) -> list.sumOf { it.transaction.amount } }
-        .toList()
-        .sortedByDescending { it.second }
+        .groupBy { Triple(it.transaction.categoryId, it.categoryName, it.categoryIconKey) }
+        .map { (key, list) ->
+            CategoryExpenseItem(
+                categoryName = key.second,
+                categoryIconKey = key.third,
+                amount = list.sumOf { it.transaction.amount },
+            )
+        }
+        .sortedByDescending { it.amount }
         .take(5)
-    val recentRows = rows.sortedByDescending { it.transaction.expectedDate }.take(10)
-    val monthTitle = "${now.year}년 ${now.month.getDisplayName(TextStyle.FULL, Locale.KOREAN)}"
-
+    var recentFilter by rememberSaveable { mutableStateOf(RecentFilter.All) }
+    val recentRows = monthlyRows
+        .filter {
+            when (recentFilter) {
+                RecentFilter.All -> true
+                RecentFilter.Income -> isIncomeLike(TransactionType.fromKey(it.transaction.type))
+                RecentFilter.Expense -> !isIncomeLike(TransactionType.fromKey(it.transaction.type))
+            }
+        }
+        .sortedByDescending { it.transaction.expectedDate }
+        .take(10)
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
@@ -137,7 +163,11 @@ fun LedgerScreen(
             HomeHeader()
         }
         item {
-            MonthSelector(monthTitle = monthTitle)
+            MonthSelectorBar(
+                selectedMonth = selectedMonth,
+                onChangeMonth = { selectedMonth = it },
+                onOpenPicker = { showMonthPicker = true },
+            )
         }
         item {
             MonthlySummaryCard(
@@ -160,12 +190,24 @@ fun LedgerScreen(
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
-                Text(
-                    text = "최근 ${recentRows.size}건",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "최근 ${recentRows.size}건",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextButton(onClick = onViewAll) {
+                        Text("전체보기")
+                    }
+                }
             }
+        }
+        item {
+            RecentFilterTabs(
+                selected = recentFilter,
+                onSelect = { recentFilter = it },
+            )
         }
         items(items = recentRows, key = { it.transaction.id }) { row ->
             LedgerTransactionCard(
@@ -173,8 +215,22 @@ fun LedgerScreen(
                 onEdit = { onEdit(row.transaction) },
                 onDeleteRequest = { onDeleteRequest(row.transaction) },
                 onSplitMemberPaidToggle = onSplitMemberPaidToggle,
+                onOpenDetail = { onOpenDetail(row) },
+                showActionButtons = showActionButtons,
+                allowInlineSplitExpand = allowInlineSplitExpand,
             )
         }
+    }
+
+    if (showMonthPicker) {
+        YearMonthPickerDialog(
+            initial = selectedMonth,
+            onDismiss = { showMonthPicker = false },
+            onConfirm = {
+                selectedMonth = it
+                showMonthPicker = false
+            },
+        )
     }
 }
 
@@ -206,28 +262,6 @@ private fun HomeHeader() {
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                 style = MaterialTheme.typography.labelLarge,
             )
-        }
-    }
-}
-
-@Composable
-private fun MonthSelector(monthTitle: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surfaceVariant) {
-            Text("〈", modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Text(
-            text = monthTitle,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surfaceVariant) {
-            Text("〉", modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
         }
     }
 }
@@ -295,7 +329,7 @@ private fun MiniSummaryCard(
 }
 
 @Composable
-private fun CategoryExpenseCard(items: List<Pair<String, Int>>) {
+private fun CategoryExpenseCard(items: List<CategoryExpenseItem>) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -310,18 +344,29 @@ private fun CategoryExpenseCard(items: List<Pair<String, Int>>) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                val max = items.maxOf { it.second }.coerceAtLeast(1)
-                items.forEach { (name, amount) ->
+                val max = items.maxOf { it.amount }.coerceAtLeast(1)
+                items.forEach { item ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(name, style = MaterialTheme.typography.bodyLarge)
-                        Text("${formatMoney(amount)}원", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CategoryIconDisplay(
+                                iconKey = item.categoryIconKey,
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(item.categoryName, style = MaterialTheme.typography.bodyLarge)
+                        }
+                        Text(
+                            "${formatMoney(item.amount)}원",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
                     }
                     Spacer(modifier = Modifier.height(6.dp))
-                    val ratio = amount.toFloat() / max.toFloat()
+                    val ratio = item.amount.toFloat() / max.toFloat()
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -343,11 +388,41 @@ private fun CategoryExpenseCard(items: List<Pair<String, Int>>) {
 }
 
 @Composable
+private fun RecentFilterTabs(
+    selected: RecentFilter,
+    onSelect: (RecentFilter) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        RecentFilter.entries.forEach { filter ->
+            val active = filter == selected
+            Surface(
+                shape = CircleShape,
+                color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.clickable { onSelect(filter) },
+            ) {
+                Text(
+                    text = filter.label,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun LedgerTransactionCard(
     row: LedgerRow,
     onEdit: () -> Unit,
     onDeleteRequest: () -> Unit,
     onSplitMemberPaidToggle: (SplitMemberEntity) -> Unit,
+    onOpenDetail: () -> Unit,
+    showActionButtons: Boolean,
+    allowInlineSplitExpand: Boolean,
 ) {
     val tx = row.transaction
     val type = TransactionType.fromKey(tx.type)
@@ -366,17 +441,20 @@ private fun LedgerTransactionCard(
     val incomeLike = isIncomeLike(type)
     val amountColor = if (incomeLike) Color(0xFF00B874) else Color(0xFFFF6363)
     val signedAmount = "${if (incomeLike) "+" else "-"}${formatMoney(tx.amount)}원"
+    val hasMemo = !tx.memo.isNullOrBlank()
+    val splitDone = isSplitComplete(members)
+    val containerColor = when {
+        isSplit && splitDone -> Color(0xFFE9FFF3)
+        isSplit -> Color(0xFFF4EEFF)
+        hasMemo -> Color(0xFFFFF9DB)
+        pendingFixed -> MaterialTheme.colorScheme.surfaceVariant
+        else -> MaterialTheme.colorScheme.surface
+    }
 
     Card(
-        modifier = modifier,
+        modifier = modifier.clickable(onClick = onOpenDetail),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (pendingFixed) {
-                MaterialTheme.colorScheme.surfaceVariant
-            } else {
-                MaterialTheme.colorScheme.surface
-            }
-        )
+        colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -384,74 +462,76 @@ private fun LedgerTransactionCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = if (isSplit) "뿜빠이" else type.label,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    CategoryIconDisplay(
+                        iconKey = row.categoryIconKey,
+                        modifier = Modifier.width(52.dp),
                     )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = row.categoryName,
-                            style = MaterialTheme.typography.titleMedium
+                            text = tx.memo?.takeIf { it.isNotBlank() } ?: if (isSplit) "뿜빠이 정산" else row.categoryName,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
                         )
+                        Text(
+                            text = "${row.categoryName} · ${formatMonthDay(tx.expectedDate)}",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
                         Text(
                             text = signedAmount,
                             style = MaterialTheme.typography.titleMedium,
                             color = amountColor,
                             fontWeight = FontWeight.Bold,
                         )
-                    }
-                    if (isSplit && memberTotal > 0) {
-                        Text(
-                            text = "수금 $paidCount / $memberTotal",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    if (tx.memo != null && tx.memo.isNotBlank()) {
-                        Text(
-                            text = tx.memo,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    if (type.isFixed) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "예정일 $dateStr · 알람 ${if (tx.hasAlarm) "켜짐" else "꺼짐"}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        if (pendingFixed) {
+                        if (isSplit && memberTotal > 0) {
                             Text(
-                                text = "예정 · 미확정",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.tertiary
-                            )
-                        } else {
-                            Text(
-                                text = "확정됨",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.secondary
+                                text = "수금 $paidCount / $memberTotal",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                 }
-                Column(horizontalAlignment = Alignment.End) {
-                    TextButton(onClick = onEdit) {
-                        Text("수정")
-                    }
-                    TextButton(onClick = onDeleteRequest) {
-                        Text("삭제")
+                if (showActionButtons) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        TextButton(onClick = onEdit) {
+                            Text("수정")
+                        }
+                        TextButton(onClick = onDeleteRequest) {
+                            Text("삭제")
+                        }
                     }
                 }
             }
-            if (isSplit) {
+            if (type.isFixed) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "예정일 $dateStr · 알람 ${if (tx.hasAlarm) "켜짐" else "꺼짐"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (pendingFixed) {
+                    Text(
+                        text = "예정 · 미확정",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                } else {
+                    Text(
+                        text = "확정됨",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
+            }
+            if (isSplit && allowInlineSplitExpand) {
                 TextButton(onClick = { splitExpanded = !splitExpanded }) {
                     Text(if (splitExpanded) "정산 접기" else "정산 펼치기")
                 }
@@ -515,9 +595,31 @@ private fun formatExpectedDate(epochMillis: Long): String {
 private fun formatMoney(amount: Int): String =
     NumberFormat.getNumberInstance(Locale.KOREA).format(amount)
 
+private fun formatMonthDay(epochMillis: Long): String {
+    val d = Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).toLocalDate()
+    return "%02d-%02d".format(d.monthValue, d.dayOfMonth)
+}
+
 private fun isIncomeLike(type: TransactionType): Boolean =
     when (type) {
         TransactionType.INCOME, TransactionType.FIXED_INCOME -> true
         TransactionType.EXPENSE, TransactionType.SPLIT -> false
         TransactionType.FIXED_EXPENSE -> false
     }
+
+private fun isSplitComplete(members: List<SplitMemberEntity>): Boolean {
+    val targets = members.filterNot { it.isPrimaryPayer }
+    return targets.isNotEmpty() && targets.all { it.isPaid }
+}
+
+private data class CategoryExpenseItem(
+    val categoryName: String,
+    val categoryIconKey: String?,
+    val amount: Int,
+)
+
+private enum class RecentFilter(val label: String) {
+    All("전체"),
+    Income("수입"),
+    Expense("지출"),
+}

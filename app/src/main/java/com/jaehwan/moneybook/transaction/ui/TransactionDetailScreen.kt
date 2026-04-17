@@ -1,0 +1,160 @@
+package com.jaehwan.moneybook.transaction.ui
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.jaehwan.moneybook.splitmember.data.local.SplitMemberEntity
+import com.jaehwan.moneybook.transaction.domain.model.TransactionType
+import java.text.NumberFormat
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TransactionDetailScreen(
+    row: LedgerRow,
+    onBack: () -> Unit,
+    onSplitMemberPaidToggle: (SplitMemberEntity) -> Unit,
+) {
+    val tx = row.transaction
+    val type = TransactionType.fromKey(tx.type)
+    val splitMembers = row.splitMembers
+    val isSplit = type == TransactionType.SPLIT
+    val incomeLike = type == TransactionType.INCOME || type == TransactionType.FIXED_INCOME
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("거래 상세") },
+                navigationIcon = {
+                    TextButton(onClick = onBack) {
+                        Text("뒤로")
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "${if (incomeLike) "+" else "-"}${formatMoney(tx.amount)}원",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (incomeLike) Color(0xFF00B874) else Color(0xFFFF6363),
+                        )
+                        Text("유형: ${type.label}", style = MaterialTheme.typography.bodyLarge)
+                        Text("카테고리: ${row.categoryName}", style = MaterialTheme.typography.bodyLarge)
+                        Text("날짜: ${formatDate(tx.expectedDate)}", style = MaterialTheme.typography.bodyLarge)
+                        Text("메모: ${tx.memo?.takeIf { it.isNotBlank() } ?: "없음"}", style = MaterialTheme.typography.bodyLarge)
+                        if (type.isFixed) {
+                            Text(
+                                "고정거래: ${if (tx.isConfirmed) "확정" else "미확정"} · 알람 ${if (tx.hasAlarm) "켜짐" else "꺼짐"}",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+                }
+            }
+            if (isSplit) {
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isSplitComplete(splitMembers)) Color(0xFFE9FFF3) else Color(0xFFF4EEFF)
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("뿜빠이 멤버", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text(
+                                "진행 상태: ${splitMembers.count { it.isPaid }} / ${splitMembers.size}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+                items(splitMembers, key = { it.id }) { member ->
+                    Card {
+                        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column {
+                                    Text(
+                                        text = if (member.isPrimaryPayer) "${member.memberName} (결제자)" else member.memberName,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    Text(
+                                        text = "합의금 ${formatMoney(member.agreedAmount ?: 0)}원",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(if (member.isPaid) "정산완료" else "미정산")
+                                    Switch(
+                                        checked = member.isPaid,
+                                        onCheckedChange = {
+                                            onSplitMemberPaidToggle(
+                                                member.copy(isPaid = it, updatedAt = System.currentTimeMillis())
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+                            HorizontalDivider()
+                            Text("추가금 ${formatMoney(member.extraAmount ?: 0)}원 / 차감 ${formatMoney(member.deductionAmount ?: 0)}원")
+                            Text("메모: ${member.paymentMemo?.takeIf { it.isNotBlank() } ?: "없음"}")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun formatDate(epochMillis: Long): String =
+    DateTimeFormatter.ISO_LOCAL_DATE.format(
+        Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).toLocalDate()
+    )
+
+private fun formatMoney(amount: Int): String =
+    NumberFormat.getNumberInstance(Locale.KOREA).format(amount)
+
+private fun isSplitComplete(members: List<SplitMemberEntity>): Boolean {
+    val targets = members.filterNot { it.isPrimaryPayer }
+    return targets.isNotEmpty() && targets.all { it.isPaid }
+}

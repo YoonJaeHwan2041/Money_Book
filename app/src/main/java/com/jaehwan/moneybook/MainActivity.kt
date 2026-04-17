@@ -1,7 +1,9 @@
 package com.jaehwan.moneybook
 
+import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.jaehwan.moneybook.ui.root.MoneyBookApp
@@ -12,7 +14,16 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(
+                AndroidColor.TRANSPARENT,
+                AndroidColor.TRANSPARENT,
+            ),
+            navigationBarStyle = SystemBarStyle.light(
+                AndroidColor.TRANSPARENT,
+                AndroidColor.TRANSPARENT,
+            ),
+        )
         setContent {
             MoneyBookTheme {
                 MoneyBookApp()

@@ -24,10 +24,11 @@ fun CategoryIconDisplay(
     modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = modifier
+        modifier = Modifier
             .size(48.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surface),
+            .background(MaterialTheme.colorScheme.surface)
+            .then(modifier),
         contentAlignment = Alignment.Center
     ) {
         if (iconKey == null) {

@@ -1,40 +1,33 @@
 package com.jaehwan.moneybook.ui.root
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.NavigationDrawerItem
-import androidx.compose.material3.NavigationDrawerItemDefaults
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,10 +41,12 @@ import com.jaehwan.moneybook.splitmember.ui.SplitEditorScreen
 import com.jaehwan.moneybook.transaction.data.local.TransactionEntity
 import com.jaehwan.moneybook.transaction.domain.model.TransactionType
 import com.jaehwan.moneybook.transaction.ui.LedgerScreen
+import com.jaehwan.moneybook.transaction.ui.TradeScreen
 import com.jaehwan.moneybook.transaction.ui.LedgerViewModel
+import com.jaehwan.moneybook.transaction.ui.TransactionDetailScreen
+import com.jaehwan.moneybook.transaction.ui.LedgerRow
 import com.jaehwan.moneybook.transaction.ui.TransactionFormDialog
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,9 +66,10 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
         return
     }
 
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
-    var destination by remember { mutableStateOf(MainDestination.Ledger) }
+    var destination by remember { mutableStateOf(MainDestination.Home) }
+    var workingPopup by remember { mutableStateOf<MainDestination?>(null) }
+    var showCategoryManager by remember { mutableStateOf(false) }
+    var showLegacyLedgerInSettings by remember { mutableStateOf(false) }
     var showCategoryForm by remember { mutableStateOf(false) }
     var categoryBeingEdited by remember { mutableStateOf<CategoryEntity?>(null) }
     var categoryPendingDelete by remember { mutableStateOf<CategoryEntity?>(null) }
@@ -85,106 +81,92 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
     var showSplitEditor by remember { mutableStateOf(false) }
     var splitEditorTransaction by remember { mutableStateOf<TransactionEntity?>(null) }
     var splitPrefill by remember { mutableStateOf<Triple<Int, Long, String?>?>(null) }
+    var selectedDetailRow by remember { mutableStateOf<LedgerRow?>(null) }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            ModalDrawerSheet(modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars)) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "MoneyBook",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                NavigationDrawerItem(
-                    label = { Text("카테고리") },
-                    selected = destination == MainDestination.Category,
-                    onClick = {
-                        destination = MainDestination.Category
-                        scope.launch { drawerState.close() }
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                    colors = NavigationDrawerItemDefaults.colors(
-                        selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        bottomBar = {
+            NavigationBar {
+                listOf(
+                    MainDestination.Home to ("홈" to Icons.Default.Home),
+                    MainDestination.Trade to ("거래" to Icons.Default.Menu),
+                    MainDestination.Report to ("리포트" to Icons.Default.Add),
+                    MainDestination.Settings to ("설정" to Icons.Default.Settings),
+                ).forEach { (dest, meta) ->
+                    val (label, icon) = meta
+                    NavigationBarItem(
+                        selected = destination == dest,
+                        onClick = {
+                            when (dest) {
+                                MainDestination.Home,
+                                MainDestination.Settings,
+                                MainDestination.Trade -> destination = dest
+                                MainDestination.Report -> workingPopup = dest
+                            }
+                        },
+                        icon = { Icon(icon, contentDescription = label) },
+                        label = { Text(label) },
                     )
-                )
-                NavigationDrawerItem(
-                    label = { Text("가계부") },
-                    selected = destination == MainDestination.Ledger,
-                    onClick = {
-                        destination = MainDestination.Ledger
-                        scope.launch { drawerState.close() }
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                    colors = NavigationDrawerItemDefaults.colors(
-                        selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer
-                    )
-                )
-            }
-        }
-    ) {
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            topBar = {
-                TopAppBar(
-                    navigationIcon = {
-                        IconButton(
-                            onClick = { scope.launch { drawerState.open() } },
-                            content = {
-                                Icon(
-                                    imageVector = Icons.Default.Menu,
-                                    contentDescription = "메뉴 열기"
-                                )
-                            }
-                        )
-                    },
-                    title = {
-                        Text(
-                            when (destination) {
-                                MainDestination.Category -> "카테고리"
-                                MainDestination.Ledger -> "가계부"
-                            }
-                        )
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        titleContentColor = MaterialTheme.colorScheme.primary
-                    )
-                )
-            },
-            floatingActionButton = {
-                when (destination) {
-                    MainDestination.Category -> {
-                        FloatingActionButton(
-                            onClick = {
-                                categoryBeingEdited = null
-                                showCategoryForm = true
-                            }
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = "카테고리 추가")
-                        }
-                    }
-                    MainDestination.Ledger -> {
-                        FloatingActionButton(
-                            onClick = {
-                                transactionBeingEdited = null
-                                showTransactionForm = true
-                            }
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = "거래 추가")
-                        }
-                    }
                 }
             }
-        ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .padding(innerPadding)
-                    .fillMaxSize()
-            ) {
-                when (destination) {
-                    MainDestination.Category -> {
+        },
+        floatingActionButton = {
+            if (destination == MainDestination.Settings && showCategoryManager) {
+                FloatingActionButton(
+                    onClick = {
+                        categoryBeingEdited = null
+                        showCategoryForm = true
+                    }
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "카테고리 추가")
+                }
+            }
+        },
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .padding(innerPadding)
+                .fillMaxSize()
+        ) {
+            when (destination) {
+                MainDestination.Home -> {
+                    LedgerScreen(
+                        rows = ledgerRows,
+                        categoriesEmpty = categories.isEmpty(),
+                        onEdit = { tx ->
+                            if (TransactionType.fromKey(tx.type) == TransactionType.SPLIT) {
+                                splitEditorTransaction = tx
+                                splitPrefill = null
+                                showSplitEditor = true
+                            } else {
+                                transactionBeingEdited = tx
+                                showTransactionForm = true
+                            }
+                        },
+                        onDeleteRequest = { tx ->
+                            transactionPendingDelete = tx
+                        },
+                        onSplitMemberPaidToggle = { member ->
+                            ledgerViewModel.updateSplitMember(member)
+                        },
+                        onOpenDetail = { row -> selectedDetailRow = row },
+                        showActionButtons = false,
+                        allowInlineSplitExpand = false,
+                        onViewAll = { workingPopup = MainDestination.Trade },
+                    )
+                }
+
+                MainDestination.Trade -> {
+                    TradeScreen(
+                        rows = ledgerRows,
+                        onAddClick = { workingPopup = MainDestination.Trade },
+                        onOpenDetail = { row -> selectedDetailRow = row },
+                        onSplitMemberPaidToggle = { member -> ledgerViewModel.updateSplitMember(member) },
+                    )
+                }
+
+                MainDestination.Settings -> {
+                    if (showCategoryManager) {
                         CategoryList(
                             categories = categories,
                             onEdit = { category ->
@@ -195,165 +177,231 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                                 categoryPendingDelete = category
                             }
                         )
-                    }
-                    MainDestination.Ledger -> {
-                        LedgerScreen(
-                            rows = ledgerRows,
-                            categoriesEmpty = categories.isEmpty(),
-                            onEdit = { tx ->
-                                if (TransactionType.fromKey(tx.type) == TransactionType.SPLIT) {
-                                    splitEditorTransaction = tx
-                                    splitPrefill = null
-                                    showSplitEditor = true
-                                } else {
-                                    transactionBeingEdited = tx
-                                    showTransactionForm = true
-                                }
-                            },
-                            onDeleteRequest = { tx ->
-                                transactionPendingDelete = tx
-                            },
-                            onSplitMemberPaidToggle = { member ->
-                                ledgerViewModel.updateSplitMember(member)
-                            },
-                        )
-                    }
-                }
-
-                if (showCategoryForm) {
-                    CategoryFormDialog(
-                        initialCategory = categoryBeingEdited,
-                        onDismiss = {
-                            showCategoryForm = false
-                            categoryBeingEdited = null
-                        },
-                        onConfirm = { name, iconKey ->
-                            val editing = categoryBeingEdited
-                            if (editing == null) {
-                                viewModel.addCategory(name, iconKey)
-                            } else {
-                                viewModel.updateCategory(
-                                    editing.copy(
-                                        name = name,
-                                        iconKey = iconKey,
-                                        updatedAt = System.currentTimeMillis()
-                                    )
-                                )
+                    } else if (showLegacyLedgerInSettings) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            TextButton(onClick = { showLegacyLedgerInSettings = false }) {
+                                Text("설정으로 돌아가기")
                             }
-                            showCategoryForm = false
-                            categoryBeingEdited = null
-                        }
-                    )
-                }
-
-                if (showTransactionForm) {
-                    TransactionFormDialog(
-                        initial = transactionBeingEdited,
-                        categories = categories,
-                        onDismiss = {
-                            showTransactionForm = false
-                            transactionBeingEdited = null
-                        },
-                        onConfirm = { entity ->
-                            if (entity.id == 0L) {
-                                ledgerViewModel.insertTransaction(entity)
-                            } else {
-                                ledgerViewModel.updateTransaction(entity)
-                            }
-                            showTransactionForm = false
-                            transactionBeingEdited = null
-                        },
-                        onRequestSplitDetails = { amount, categoryId, memo ->
-                            splitPrefill = Triple(amount, categoryId, memo)
-                            splitEditorTransaction = null
-                            showSplitEditor = true
-                        },
-                    )
-                }
-
-                if (showSplitEditor) {
-                    val initialTx = splitEditorTransaction
-                    val prefill = splitPrefill
-                    val total = initialTx?.amount ?: prefill?.first ?: 0
-                    val categoryId = initialTx?.categoryId ?: prefill?.second ?: 0L
-                    val memo = initialTx?.memo ?: prefill?.third
-                    if (total > 0 && categoryId != 0L) {
-                        SplitEditorScreen(
-                            initialTransaction = initialTx,
-                            prefilledTotal = total,
-                            prefilledCategoryId = categoryId,
-                            prefilledMemo = memo,
-                            ledgerViewModel = ledgerViewModel,
-                            onDismiss = {
-                                showSplitEditor = false
-                                splitEditorTransaction = null
-                                splitPrefill = null
-                            },
-                            onSave = { entity, members ->
-                                if (entity.id == 0L) {
-                                    ledgerViewModel.insertSplit(entity, members)
-                                } else {
-                                    ledgerViewModel.updateSplit(entity, members)
-                                }
-                                showSplitEditor = false
-                                splitEditorTransaction = null
-                                splitPrefill = null
-                            },
-                        )
-                    }
-                }
-
-                categoryPendingDelete?.let { toDelete ->
-                    AlertDialog(
-                        onDismissRequest = { categoryPendingDelete = null },
-                        title = { Text("카테고리 삭제") },
-                        text = {
-                            Text(
-                                "\"${toDelete.name}\" 카테고리를 삭제할까요?\n" +
-                                    "이 카테고리를 쓰는 거래 내역이 있으면 함께 삭제될 수 있습니다."
+                            LedgerScreen(
+                                rows = ledgerRows,
+                                categoriesEmpty = categories.isEmpty(),
+                                onEdit = { tx ->
+                                    if (TransactionType.fromKey(tx.type) == TransactionType.SPLIT) {
+                                        splitEditorTransaction = tx
+                                        splitPrefill = null
+                                        showSplitEditor = true
+                                    } else {
+                                        transactionBeingEdited = tx
+                                        showTransactionForm = true
+                                    }
+                                },
+                                onDeleteRequest = { tx ->
+                                    transactionPendingDelete = tx
+                                },
+                                onSplitMemberPaidToggle = { member ->
+                                    ledgerViewModel.updateSplitMember(member)
+                                },
+                                onOpenDetail = { row -> selectedDetailRow = row },
+                                showActionButtons = true,
+                                allowInlineSplitExpand = true,
+                                onViewAll = { workingPopup = MainDestination.Trade },
                             )
-                        },
-                        confirmButton = {
-                            TextButton(
-                                onClick = {
-                                    viewModel.deleteCategory(toDelete)
-                                    categoryPendingDelete = null
-                                }
-                            ) {
-                                Text("삭제")
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { categoryPendingDelete = null }) {
-                                Text("취소")
-                            }
                         }
-                    )
+                    } else {
+                        SettingsScreen(
+                            onOpenCategoryManager = { showCategoryManager = true },
+                            onOpenLegacyTrade = { showLegacyLedgerInSettings = true },
+                        )
+                    }
                 }
+                MainDestination.Report -> Unit
+            }
 
-                transactionPendingDelete?.let { toDelete ->
-                    AlertDialog(
-                        onDismissRequest = { transactionPendingDelete = null },
-                        title = { Text("거래 삭제") },
-                        text = { Text("이 거래를 삭제할까요?") },
-                        confirmButton = {
-                            TextButton(
-                                onClick = {
-                                    ledgerViewModel.deleteTransaction(toDelete)
-                                    transactionPendingDelete = null
-                                }
-                            ) {
-                                Text("삭제")
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { transactionPendingDelete = null }) {
-                                Text("취소")
-                            }
+            if (showCategoryForm) {
+                CategoryFormDialog(
+                    initialCategory = categoryBeingEdited,
+                    onDismiss = {
+                        showCategoryForm = false
+                        categoryBeingEdited = null
+                    },
+                    onConfirm = { name, iconKey ->
+                        val editing = categoryBeingEdited
+                        if (editing == null) {
+                            viewModel.addCategory(name, iconKey)
+                        } else {
+                            viewModel.updateCategory(
+                                editing.copy(
+                                    name = name,
+                                    iconKey = iconKey,
+                                    updatedAt = System.currentTimeMillis()
+                                )
+                            )
                         }
+                        showCategoryForm = false
+                        categoryBeingEdited = null
+                    }
+                )
+            }
+
+            if (showTransactionForm) {
+                TransactionFormDialog(
+                    initial = transactionBeingEdited,
+                    categories = categories,
+                    onDismiss = {
+                        showTransactionForm = false
+                        transactionBeingEdited = null
+                    },
+                    onConfirm = { entity ->
+                        if (entity.id == 0L) {
+                            ledgerViewModel.insertTransaction(entity)
+                        } else {
+                            ledgerViewModel.updateTransaction(entity)
+                        }
+                        showTransactionForm = false
+                        transactionBeingEdited = null
+                    },
+                    onRequestSplitDetails = { amount, categoryId, memo ->
+                        splitPrefill = Triple(amount, categoryId, memo)
+                        splitEditorTransaction = null
+                        showSplitEditor = true
+                    },
+                )
+            }
+
+            if (showSplitEditor) {
+                val initialTx = splitEditorTransaction
+                val prefill = splitPrefill
+                val total = initialTx?.amount ?: prefill?.first ?: 0
+                val categoryId = initialTx?.categoryId ?: prefill?.second ?: 0L
+                val memo = initialTx?.memo ?: prefill?.third
+                if (total > 0 && categoryId != 0L) {
+                    SplitEditorScreen(
+                        initialTransaction = initialTx,
+                        prefilledTotal = total,
+                        prefilledCategoryId = categoryId,
+                        prefilledMemo = memo,
+                        ledgerViewModel = ledgerViewModel,
+                        onDismiss = {
+                            showSplitEditor = false
+                            splitEditorTransaction = null
+                            splitPrefill = null
+                        },
+                        onSave = { entity, members ->
+                            if (entity.id == 0L) {
+                                ledgerViewModel.insertSplit(entity, members)
+                            } else {
+                                ledgerViewModel.updateSplit(entity, members)
+                            }
+                            showSplitEditor = false
+                            splitEditorTransaction = null
+                            splitPrefill = null
+                        },
                     )
                 }
             }
+
+            categoryPendingDelete?.let { toDelete ->
+                AlertDialog(
+                    onDismissRequest = { categoryPendingDelete = null },
+                    title = { Text("카테고리 삭제") },
+                    text = {
+                        Text(
+                            "\"${toDelete.name}\" 카테고리를 삭제할까요?\n" +
+                                "이 카테고리를 쓰는 거래 내역이 있으면 함께 삭제될 수 있습니다."
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                viewModel.deleteCategory(toDelete)
+                                categoryPendingDelete = null
+                            }
+                        ) {
+                            Text("삭제")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { categoryPendingDelete = null }) {
+                            Text("취소")
+                        }
+                    }
+                )
+            }
+
+            transactionPendingDelete?.let { toDelete ->
+                AlertDialog(
+                    onDismissRequest = { transactionPendingDelete = null },
+                    title = { Text("거래 삭제") },
+                    text = { Text("이 거래를 삭제할까요?") },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                ledgerViewModel.deleteTransaction(toDelete)
+                                transactionPendingDelete = null
+                            }
+                        ) {
+                            Text("삭제")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { transactionPendingDelete = null }) {
+                            Text("취소")
+                        }
+                    }
+                )
+            }
+
+            workingPopup?.let { pending ->
+                val label = if (pending == MainDestination.Trade) "거래" else "리포트"
+                AlertDialog(
+                    onDismissRequest = { workingPopup = null },
+                    title = { Text(label) },
+                    text = { Text("아직 작업중입니다.") },
+                    confirmButton = {
+                        TextButton(onClick = { workingPopup = null }) {
+                            Text("확인")
+                        }
+                    },
+                )
+            }
+
+            selectedDetailRow?.let { detailRow ->
+                TransactionDetailScreen(
+                    row = detailRow,
+                    onBack = { selectedDetailRow = null },
+                    onSplitMemberPaidToggle = { member -> ledgerViewModel.updateSplitMember(member) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsScreen(
+    onOpenCategoryManager: () -> Unit,
+    onOpenLegacyTrade: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            text = "설정",
+            style = MaterialTheme.typography.headlineSmall,
+        )
+        FilledTonalButton(
+            onClick = onOpenCategoryManager,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("카테고리 관리")
+        }
+        FilledTonalButton(
+            onClick = onOpenLegacyTrade,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("거래 내용 (이전 가계부)")
         }
     }
 }

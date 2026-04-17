@@ -17,6 +17,9 @@ interface TransactionDao {
     @Query("SELECT * FROM `transaction` WHERE created_at BETWEEN :start AND :end ORDER BY created_at DESC")
     fun getTransactionsByPeriod(start: Long, end: Long): Flow<List<TransactionEntity>>
 
+    @Query("SELECT COUNT(*) FROM `transaction`")
+    suspend fun countTransactions(): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransaction(transaction: TransactionEntity): Long
 

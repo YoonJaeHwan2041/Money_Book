@@ -19,6 +19,11 @@ class LedgerViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
     private val categoryRepository: CategoryRepository,
 ) : ViewModel() {
+    init {
+        viewModelScope.launch {
+            transactionRepository.ensureMarchDemoTransactions()
+        }
+    }
 
     val ledgerRows: StateFlow<List<LedgerRow>> = combine(
         transactionRepository.allTransactions,
@@ -31,6 +36,7 @@ class LedgerViewModel @Inject constructor(
             LedgerRow(
                 transaction = tx,
                 categoryName = byId[tx.categoryId]?.name ?: "(알 수 없음)",
+                categoryIconKey = byId[tx.categoryId]?.iconKey,
                 splitMembers = membersByTx[tx.id].orEmpty(),
             )
         }
