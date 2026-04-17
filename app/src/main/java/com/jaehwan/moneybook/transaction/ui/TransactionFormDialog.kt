@@ -46,11 +46,9 @@ import com.jaehwan.moneybook.category.data.local.CategoryEntity
 import com.jaehwan.moneybook.transaction.data.local.TransactionEntity
 import com.jaehwan.moneybook.transaction.domain.model.TransactionType
 import com.jaehwan.moneybook.ui.focusScrollToVerticalBiasInViewport
-import java.text.NumberFormat
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -369,12 +367,8 @@ fun TransactionFormDialog(
 }
 
 private fun parseAmountInput(value: String): Int? =
-    value.replace(",", "").toIntOrNull()
+    com.jaehwan.moneybook.transaction.domain.parseMoneyInput(value)
 
 private fun formatAmountInput(value: String): String {
-    val digits = value.filter { it.isDigit() }
-    if (digits.isEmpty()) return ""
-    val normalized = digits.trimStart('0').ifEmpty { "0" }
-    val asLong = normalized.toLongOrNull() ?: return normalized
-    return NumberFormat.getNumberInstance(Locale.KOREA).format(asLong)
+    return com.jaehwan.moneybook.transaction.domain.formatMoneyInput(value)
 }

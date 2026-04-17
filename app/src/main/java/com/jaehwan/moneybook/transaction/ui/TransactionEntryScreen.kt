@@ -48,11 +48,9 @@ import com.jaehwan.moneybook.splitmember.data.local.SplitMemberEntity
 import com.jaehwan.moneybook.transaction.data.local.TransactionEntity
 import com.jaehwan.moneybook.transaction.domain.model.TransactionType
 import com.jaehwan.moneybook.ui.focusScrollToVerticalBiasInViewport
-import java.text.NumberFormat
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 import kotlin.math.max
 
 private data class SplitMemberDraft(
@@ -157,8 +155,9 @@ fun TransactionEntryScreen(
                     TextButton(
                         onClick = {
                             formError = null
-                            if (amountText.isBlank()) {
-                                formError = "금액 칸은 빈칸입니다."
+                            val amountError = validateTransactionAmount(amountText)
+                            if (amountError != null) {
+                                formError = amountError
                                 return@TextButton
                             }
                             val amount = parseAmountInput(amountText) ?: return@TextButton
@@ -181,24 +180,22 @@ fun TransactionEntryScreen(
                                 onSaveNormal(entity)
                                 return@TextButton
                             }
-                            if (participantCountText.isBlank()) {
-                                formError = "총 인원 수 칸은 빈칸입니다."
-                                return@TextButton
-                            }
-                            if (selfAmountText.isBlank()) {
-                                formError = "본인 부담금 칸은 빈칸입니다."
-                                return@TextButton
-                            }
                             if (memberDrafts.isEmpty()) return@TextButton
-                            memberDrafts.forEachIndexed { index, draft ->
-                                if (draft.name.isBlank()) {
-                                    formError = "멤버 ${index + 1} 이름 칸은 빈칸입니다."
-                                    return@TextButton
-                                }
-                                if (draft.amountText.isBlank()) {
-                                    formError = "멤버 ${index + 1} 금액 칸은 빈칸입니다."
-                                    return@TextButton
-                                }
+                            val splitError = validateSplitInput(
+                                SplitDraftValidationInput(
+                                    participantCountText = participantCountText,
+                                    selfAmountText = selfAmountText,
+                                    memberDrafts = memberDrafts.map { draft ->
+                                        SplitMemberDraftInput(
+                                            name = draft.name,
+                                            amountText = draft.amountText,
+                                        )
+                                    },
+                                )
+                            )
+                            if (splitError != null) {
+                                formError = splitError
+                                return@TextButton
                             }
                             val members = buildList {
                                 add(
@@ -457,17 +454,14 @@ private fun CategoryPickerField(
 }
 
 private fun parseAmountInput(value: String): Int? =
-    value.replace(",", "").toIntOrNull()
+    com.jaehwan.moneybook.transaction.domain.parseMoneyInput(value)
 
 private fun formatAmountInput(value: String): String {
-    val digits = value.filter { it.isDigit() }
-    if (digits.isEmpty()) return ""
-    val normalized = digits.trimStart('0').ifEmpty { "0" }
-    return NumberFormat.getNumberInstance(Locale.KOREA).format(normalized.toLongOrNull() ?: return normalized)
+    return com.jaehwan.moneybook.transaction.domain.formatMoneyInput(value)
 }
 
 private fun formatMoney(amount: Int): String =
-    NumberFormat.getNumberInstance(Locale.KOREA).format(amount)
+    com.jaehwan.moneybook.transaction.domain.formatMoney(amount)
 
 private fun startOfDayMillis(): Long =
     java.time.LocalDate.now()

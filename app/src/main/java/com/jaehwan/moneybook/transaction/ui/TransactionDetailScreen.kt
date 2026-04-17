@@ -27,11 +27,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.jaehwan.moneybook.splitmember.data.local.SplitMemberEntity
 import com.jaehwan.moneybook.transaction.domain.model.TransactionType
-import java.text.NumberFormat
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,9 +44,7 @@ fun TransactionDetailScreen(
     val isSplit = type == TransactionType.SPLIT
     val incomeLike = type == TransactionType.INCOME || type == TransactionType.FIXED_INCOME
     val unpaidTotal = splitMembers
-        .filterNot { it.isPrimaryPayer }
-        .filterNot { it.isPaid }
-        .sumOf { it.agreedAmount ?: 0 }
+        .let { com.jaehwan.moneybook.transaction.domain.unpaidTotal(it) }
 
     Scaffold(
         topBar = {
@@ -198,9 +194,8 @@ private fun formatDate(epochMillis: Long): String =
     )
 
 private fun formatMoney(amount: Int): String =
-    NumberFormat.getNumberInstance(Locale.KOREA).format(amount)
+    com.jaehwan.moneybook.transaction.domain.formatMoney(amount)
 
 private fun isSplitComplete(members: List<SplitMemberEntity>): Boolean {
-    val targets = members.filterNot { it.isPrimaryPayer }
-    return targets.isNotEmpty() && targets.all { it.isPaid }
+    return com.jaehwan.moneybook.transaction.domain.isSplitComplete(members)
 }

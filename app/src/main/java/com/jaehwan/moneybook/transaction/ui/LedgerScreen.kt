@@ -42,13 +42,11 @@ import com.jaehwan.moneybook.category.ui.CategoryIconDisplay
 import com.jaehwan.moneybook.splitmember.data.local.SplitMemberEntity
 import com.jaehwan.moneybook.transaction.data.local.TransactionEntity
 import com.jaehwan.moneybook.transaction.domain.model.TransactionType
-import java.text.NumberFormat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 @Composable
 fun LedgerScreen(
@@ -104,37 +102,20 @@ fun LedgerScreen(
         mutableStateOf(YearMonth.of(pivotDate.year, pivotDate.month))
     }
     var showMonthPicker by rememberSaveable { mutableStateOf(false) }
-    val startOfMonth = selectedMonth.atDay(1)
-    val endOfMonth = selectedMonth.atEndOfMonth()
-    val monthlyRows = rows.filter { row ->
-        val d = Instant.ofEpochMilli(row.transaction.expectedDate)
-            .atZone(ZoneId.systemDefault())
-            .toLocalDate()
-        !d.isBefore(startOfMonth) && !d.isAfter(endOfMonth)
-    }
-    val monthlyIncome = monthlyRows.sumOf { row ->
-        when (TransactionType.fromKey(row.transaction.type)) {
-            TransactionType.INCOME -> row.transaction.amount
-            TransactionType.FIXED_INCOME -> if (row.transaction.isConfirmed) row.transaction.amount else 0
-            else -> 0
+    LaunchedEffect(rows) {
+        if (rows.none { it.isInMonth(selectedMonth) }) {
+            val latest = rows.maxOfOrNull { it.transaction.expectedDate }
+            if (latest != null) {
+                val d = Instant.ofEpochMilli(latest).atZone(ZoneId.systemDefault()).toLocalDate()
+                selectedMonth = YearMonth.of(d.year, d.monthValue)
+            }
         }
     }
-    val monthlyExpense = monthlyRows.sumOf { row ->
-        when (TransactionType.fromKey(row.transaction.type)) {
-            TransactionType.EXPENSE, TransactionType.SPLIT -> row.transaction.amount
-            TransactionType.FIXED_EXPENSE -> if (row.transaction.isConfirmed) row.transaction.amount else 0
-            else -> 0
-        }
-    }
-    val currentBalance = rows.sumOf { row ->
-        val amount = row.transaction.amount
-        when (TransactionType.fromKey(row.transaction.type)) {
-            TransactionType.INCOME -> amount
-            TransactionType.EXPENSE, TransactionType.SPLIT -> -amount
-            TransactionType.FIXED_INCOME -> if (row.transaction.isConfirmed) amount else 0
-            TransactionType.FIXED_EXPENSE -> if (row.transaction.isConfirmed) -amount else 0
-        }
-    }
+    val monthlyRows = rows.filter { it.isInMonth(selectedMonth) }
+    val monthlyTotals = calculateMonthlyTotals(monthlyRows)
+    val monthlyIncome = monthlyTotals.income
+    val monthlyExpense = monthlyTotals.expense
+    val currentBalance = calculateCurrentBalance(rows)
     val categoryExpenses = monthlyRows
         .filter {
             val t = TransactionType.fromKey(it.transaction.type)
@@ -608,7 +589,7 @@ private fun formatExpectedDate(epochMillis: Long): String {
 }
 
 private fun formatMoney(amount: Int): String =
-    NumberFormat.getNumberInstance(Locale.KOREA).format(amount)
+    com.jaehwan.moneybook.transaction.domain.formatMoney(amount)
 
 private fun formatMonthDay(epochMillis: Long): String {
     val d = Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).toLocalDate()
@@ -623,8 +604,7 @@ private fun isIncomeLike(type: TransactionType): Boolean =
     }
 
 private fun isSplitComplete(members: List<SplitMemberEntity>): Boolean {
-    val targets = members.filterNot { it.isPrimaryPayer }
-    return targets.isNotEmpty() && targets.all { it.isPaid }
+    return com.jaehwan.moneybook.transaction.domain.isSplitComplete(members)
 }
 
 private data class CategoryExpenseItem(

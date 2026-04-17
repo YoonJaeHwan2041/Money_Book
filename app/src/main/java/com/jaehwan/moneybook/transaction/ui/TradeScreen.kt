@@ -47,12 +47,10 @@ import androidx.compose.ui.unit.dp
 import com.jaehwan.moneybook.category.ui.CategoryIconDisplay
 import com.jaehwan.moneybook.splitmember.data.local.SplitMemberEntity
 import com.jaehwan.moneybook.transaction.domain.model.TransactionType
-import java.text.NumberFormat
 import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 @Composable
 fun TradeScreen(
@@ -82,10 +80,7 @@ fun TradeScreen(
     var selectedType by rememberSaveable { mutableStateOf(TradeTypeTab.All) }
     var selectedCategory by rememberSaveable { mutableStateOf<String?>(null) }
 
-    val rowsByMonth = rows.filter { row ->
-        val date = Instant.ofEpochMilli(row.transaction.expectedDate).atZone(ZoneId.systemDefault()).toLocalDate()
-        date.year == selectedMonth.year && date.monthValue == selectedMonth.monthValue
-    }
+    val rowsByMonth = rows.filter { it.isInMonth(selectedMonth) }
     val availableCategories = rowsByMonth.map { it.categoryName }.distinct().sorted()
     val filteredRows = rowsByMonth
         .filter { row ->
@@ -107,10 +102,7 @@ fun TradeScreen(
     val totalExpense = filteredRows
         .filter { !isIncomeType(it.transaction.type) }
         .sumOf { it.transaction.amount }
-    val globalBalance = rows.sumOf { row ->
-        val amount = row.transaction.amount
-        if (isIncomeType(row.transaction.type)) amount else -amount
-    }
+    val globalBalance = calculateCurrentBalance(rows)
 
     val groupedByDate = filteredRows.groupBy { formatDate(it.transaction.expectedDate) }
 
@@ -462,9 +454,7 @@ private fun AnimatedSplitMembers(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             val unpaidTotal = members
-                .filterNot { it.isPrimaryPayer }
-                .filterNot { it.isPaid }
-                .sumOf { it.agreedAmount ?: 0 }
+                .let { com.jaehwan.moneybook.transaction.domain.unpaidTotal(it) }
             Text(
                 text = "미정산 금액 합계 ${formatMoney(unpaidTotal)}원",
                 style = MaterialTheme.typography.bodySmall,
@@ -543,7 +533,7 @@ private fun formatDate(epochMillis: Long): String =
     )
 
 private fun formatMoney(amount: Int): String =
-    NumberFormat.getNumberInstance(Locale.KOREA).format(amount)
+    com.jaehwan.moneybook.transaction.domain.formatMoney(amount)
 
 private enum class TradeTypeTab(val label: String) {
     All("전체"),
@@ -552,6 +542,5 @@ private enum class TradeTypeTab(val label: String) {
 }
 
 private fun isSplitComplete(members: List<SplitMemberEntity>): Boolean {
-    val targets = members.filterNot { it.isPrimaryPayer }
-    return targets.isNotEmpty() && targets.all { it.isPaid }
+    return com.jaehwan.moneybook.transaction.domain.isSplitComplete(members)
 }

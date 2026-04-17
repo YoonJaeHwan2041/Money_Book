@@ -73,8 +73,7 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
 
     var destination by remember { mutableStateOf(MainDestination.Home) }
     var workingPopup by remember { mutableStateOf<MainDestination?>(null) }
-    var showCategoryManager by remember { mutableStateOf(false) }
-    var showLegacyLedgerInSettings by remember { mutableStateOf(false) }
+    var settingsSection by remember { mutableStateOf(SettingsSection.Root) }
     var showCategoryForm by remember { mutableStateOf(false) }
     var categoryBeingEdited by remember { mutableStateOf<CategoryEntity?>(null) }
     var categoryPendingDelete by remember { mutableStateOf<CategoryEntity?>(null) }
@@ -111,8 +110,7 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
             transactionPendingDelete != null -> transactionPendingDelete = null
             categoryPendingDelete != null -> categoryPendingDelete = null
             workingPopup != null -> workingPopup = null
-            showLegacyLedgerInSettings -> showLegacyLedgerInSettings = false
-            showCategoryManager -> showCategoryManager = false
+            settingsSection != SettingsSection.Root -> settingsSection = SettingsSection.Root
             destination != MainDestination.Home -> destination = MainDestination.Home
             else -> {
                 val now = System.currentTimeMillis()
@@ -156,7 +154,7 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
         },
         floatingActionButton = {
             when {
-                destination == MainDestination.Settings && showCategoryManager -> {
+                destination == MainDestination.Settings && settingsSection == SettingsSection.CategoryManager -> {
                     FloatingActionButton(
                         onClick = {
                             categoryBeingEdited = null
@@ -215,7 +213,7 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                 }
 
                 MainDestination.Settings -> {
-                    if (showCategoryManager) {
+                    if (settingsSection == SettingsSection.CategoryManager) {
                         CategoryList(
                             categories = categories,
                             onEdit = { category ->
@@ -226,9 +224,9 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                                 categoryPendingDelete = category
                             }
                         )
-                    } else if (showLegacyLedgerInSettings) {
+                    } else if (settingsSection == SettingsSection.LegacyLedger) {
                         Column(modifier = Modifier.fillMaxSize()) {
-                            TextButton(onClick = { showLegacyLedgerInSettings = false }) {
+                            TextButton(onClick = { settingsSection = SettingsSection.Root }) {
                                 Text("설정으로 돌아가기")
                             }
                             LedgerScreen(
@@ -258,8 +256,8 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                         }
                     } else {
                         SettingsScreen(
-                            onOpenCategoryManager = { showCategoryManager = true },
-                            onOpenLegacyTrade = { showLegacyLedgerInSettings = true },
+                            onOpenCategoryManager = { settingsSection = SettingsSection.CategoryManager },
+                            onOpenLegacyTrade = { settingsSection = SettingsSection.LegacyLedger },
                         )
                     }
                 }
@@ -471,4 +469,10 @@ private fun SplashScreen() {
             color = MaterialTheme.colorScheme.onBackground,
         )
     }
+}
+
+private enum class SettingsSection {
+    Root,
+    CategoryManager,
+    LegacyLedger,
 }

@@ -44,8 +44,6 @@ import com.jaehwan.moneybook.transaction.domain.model.TransactionType
 import com.jaehwan.moneybook.transaction.ui.LedgerViewModel
 import com.jaehwan.moneybook.transaction.ui.startOfDayMillis
 import com.jaehwan.moneybook.ui.focusScrollToVerticalBiasInViewport
-import java.text.NumberFormat
-import java.util.Locale
 
 private data class MemberRowState(
     val name: String,
@@ -141,9 +139,9 @@ fun SplitEditorScreen(
                                     categoryId = prefilledCategoryId,
                                     amount = total,
                                     type = TransactionType.SPLIT.key,
-                                    isConfirmed = true,
-                                    expectedDate = startOfDayMillis(),
-                                    hasAlarm = false,
+                                isConfirmed = initialTransaction?.isConfirmed ?: true,
+                                expectedDate = initialTransaction?.expectedDate ?: startOfDayMillis(),
+                                hasAlarm = initialTransaction?.hasAlarm ?: false,
                                     memo = prefilledMemo?.trim()?.ifEmpty { null },
                                     createdAt = initialTransaction?.createdAt ?: now,
                                     updatedAt = now,
@@ -353,12 +351,8 @@ fun SplitEditorScreen(
 }
 
 private fun parseAmountInput(value: String): Int? =
-    value.replace(",", "").toIntOrNull()
+    com.jaehwan.moneybook.transaction.domain.parseMoneyInput(value)
 
 private fun formatAmountInput(value: String): String {
-    val digits = value.filter { it.isDigit() }
-    if (digits.isEmpty()) return ""
-    val normalized = digits.trimStart('0').ifEmpty { "0" }
-    val asLong = normalized.toLongOrNull() ?: return normalized
-    return NumberFormat.getNumberInstance(Locale.KOREA).format(asLong)
+    return com.jaehwan.moneybook.transaction.domain.formatMoneyInput(value)
 }
