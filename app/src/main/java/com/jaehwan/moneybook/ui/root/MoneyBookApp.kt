@@ -49,7 +49,7 @@ import com.jaehwan.moneybook.transaction.ui.TradeScreen
 import com.jaehwan.moneybook.transaction.ui.LedgerViewModel
 import com.jaehwan.moneybook.transaction.ui.TransactionDetailScreen
 import com.jaehwan.moneybook.transaction.ui.LedgerRow
-import com.jaehwan.moneybook.transaction.ui.TransactionFormDialog
+import com.jaehwan.moneybook.transaction.ui.TransactionEntryScreen
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -79,26 +79,29 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
     var categoryBeingEdited by remember { mutableStateOf<CategoryEntity?>(null) }
     var categoryPendingDelete by remember { mutableStateOf<CategoryEntity?>(null) }
 
-    var showTransactionForm by remember { mutableStateOf(false) }
+    var showTransactionEntry by remember { mutableStateOf(false) }
     var transactionBeingEdited by remember { mutableStateOf<TransactionEntity?>(null) }
     var transactionPendingDelete by remember { mutableStateOf<TransactionEntity?>(null) }
 
     var showSplitEditor by remember { mutableStateOf(false) }
     var splitEditorTransaction by remember { mutableStateOf<TransactionEntity?>(null) }
     var splitPrefill by remember { mutableStateOf<Triple<Int, Long, String?>?>(null) }
-    var selectedDetailRow by remember { mutableStateOf<LedgerRow?>(null) }
+    var selectedDetailTransactionId by remember { mutableStateOf<Long?>(null) }
+    val selectedDetailRow = selectedDetailTransactionId?.let { selectedId ->
+        ledgerRows.firstOrNull { it.transaction.id == selectedId }
+    }
     var lastBackPressedAt by remember { mutableStateOf(0L) }
 
     BackHandler {
         when {
-            selectedDetailRow != null -> selectedDetailRow = null
+            selectedDetailTransactionId != null -> selectedDetailTransactionId = null
             showSplitEditor -> {
                 showSplitEditor = false
                 splitEditorTransaction = null
                 splitPrefill = null
             }
-            showTransactionForm -> {
-                showTransactionForm = false
+            showTransactionEntry -> {
+                showTransactionEntry = false
                 transactionBeingEdited = null
             }
             showCategoryForm -> {
@@ -137,7 +140,7 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                     NavigationBarItem(
                         selected = destination == dest,
                         onClick = {
-                            selectedDetailRow = null
+                            selectedDetailTransactionId = null
                             when (dest) {
                                 MainDestination.Home,
                                 MainDestination.Settings,
@@ -152,14 +155,16 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
             }
         },
         floatingActionButton = {
-            if (destination == MainDestination.Settings && showCategoryManager) {
-                FloatingActionButton(
-                    onClick = {
-                        categoryBeingEdited = null
-                        showCategoryForm = true
+            when {
+                destination == MainDestination.Settings && showCategoryManager -> {
+                    FloatingActionButton(
+                        onClick = {
+                            categoryBeingEdited = null
+                            showCategoryForm = true
+                        }
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "카테고리 추가")
                     }
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "카테고리 추가")
                 }
             }
         },
@@ -181,7 +186,7 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                                 showSplitEditor = true
                             } else {
                                 transactionBeingEdited = tx
-                                showTransactionForm = true
+                                showTransactionEntry = true
                             }
                         },
                         onDeleteRequest = { tx ->
@@ -190,7 +195,7 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                         onSplitMemberPaidToggle = { member ->
                             ledgerViewModel.updateSplitMember(member)
                         },
-                        onOpenDetail = { row -> selectedDetailRow = row },
+                        onOpenDetail = { row -> selectedDetailTransactionId = row.transaction.id },
                         showActionButtons = false,
                         allowInlineSplitExpand = false,
                         onViewAll = { workingPopup = MainDestination.Trade },
@@ -200,8 +205,11 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                 MainDestination.Trade -> {
                     TradeScreen(
                         rows = ledgerRows,
-                        onAddClick = { workingPopup = MainDestination.Trade },
-                        onOpenDetail = { row -> selectedDetailRow = row },
+                        onAddClick = {
+                            transactionBeingEdited = null
+                            showTransactionEntry = true
+                        },
+                        onOpenDetail = { row -> selectedDetailTransactionId = row.transaction.id },
                         onSplitMemberPaidToggle = { member -> ledgerViewModel.updateSplitMember(member) },
                     )
                 }
@@ -233,7 +241,7 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                                         showSplitEditor = true
                                     } else {
                                         transactionBeingEdited = tx
-                                        showTransactionForm = true
+                                        showTransactionEntry = true
                                     }
                                 },
                                 onDeleteRequest = { tx ->
@@ -242,7 +250,7 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                                 onSplitMemberPaidToggle = { member ->
                                     ledgerViewModel.updateSplitMember(member)
                                 },
-                                onOpenDetail = { row -> selectedDetailRow = row },
+                                onOpenDetail = { row -> selectedDetailTransactionId = row.transaction.id },
                                 showActionButtons = true,
                                 allowInlineSplitExpand = true,
                                 onViewAll = { workingPopup = MainDestination.Trade },
@@ -284,27 +292,31 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                 )
             }
 
-            if (showTransactionForm) {
-                TransactionFormDialog(
-                    initial = transactionBeingEdited,
+            if (showTransactionEntry) {
+                TransactionEntryScreen(
                     categories = categories,
+                    initial = transactionBeingEdited,
                     onDismiss = {
-                        showTransactionForm = false
+                        showTransactionEntry = false
                         transactionBeingEdited = null
                     },
-                    onConfirm = { entity ->
+                    onSaveNormal = { entity ->
                         if (entity.id == 0L) {
                             ledgerViewModel.insertTransaction(entity)
                         } else {
                             ledgerViewModel.updateTransaction(entity)
                         }
-                        showTransactionForm = false
+                        showTransactionEntry = false
                         transactionBeingEdited = null
                     },
-                    onRequestSplitDetails = { amount, categoryId, memo ->
-                        splitPrefill = Triple(amount, categoryId, memo)
-                        splitEditorTransaction = null
-                        showSplitEditor = true
+                    onSaveSplit = { entity, members ->
+                        if (entity.id == 0L) {
+                            ledgerViewModel.insertSplit(entity, members)
+                        } else {
+                            ledgerViewModel.updateSplit(entity, members)
+                        }
+                        showTransactionEntry = false
+                        transactionBeingEdited = null
                     },
                 )
             }
@@ -409,7 +421,7 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
             selectedDetailRow?.let { detailRow ->
                 TransactionDetailScreen(
                     row = detailRow,
-                    onBack = { selectedDetailRow = null },
+                    onBack = { selectedDetailTransactionId = null },
                     onSplitMemberPaidToggle = { member -> ledgerViewModel.updateSplitMember(member) },
                 )
             }

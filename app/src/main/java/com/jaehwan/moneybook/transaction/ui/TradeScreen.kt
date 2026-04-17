@@ -390,15 +390,14 @@ private fun TradeTransactionRow(
         else -> MaterialTheme.colorScheme.surface
     }
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onOpenDetail),
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = containerColor),
     ) {
         Column {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .clickable(onClick = onOpenDetail)
                     .padding(14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
@@ -462,6 +461,15 @@ private fun AnimatedSplitMembers(
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            val unpaidTotal = members
+                .filterNot { it.isPrimaryPayer }
+                .filterNot { it.isPaid }
+                .sumOf { it.agreedAmount ?: 0 }
+            Text(
+                text = "미정산 금액 합계 ${formatMoney(unpaidTotal)}원",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             if (members.isEmpty()) {
                 Text("멤버 정보가 없습니다.", style = MaterialTheme.typography.bodySmall)
             } else {
@@ -484,15 +492,19 @@ private fun AnimatedSplitMembers(
                             )
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(if (member.isPaid) "완료" else "미완료")
-                            androidx.compose.material3.Switch(
-                                checked = member.isPaid,
-                                onCheckedChange = {
-                                    onSplitMemberPaidToggle(
-                                        member.copy(isPaid = it, updatedAt = System.currentTimeMillis())
-                                    )
-                                }
-                            )
+                            if (member.isPrimaryPayer) {
+                                Text("본인 부담 완료")
+                            } else {
+                                Text(if (member.isPaid) "완료" else "미완료")
+                                androidx.compose.material3.Switch(
+                                    checked = member.isPaid,
+                                    onCheckedChange = {
+                                        onSplitMemberPaidToggle(
+                                            member.copy(isPaid = it, updatedAt = System.currentTimeMillis())
+                                        )
+                                    }
+                                )
+                            }
                         }
                     }
                 }

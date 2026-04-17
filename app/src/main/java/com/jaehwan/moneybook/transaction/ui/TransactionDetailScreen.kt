@@ -45,6 +45,10 @@ fun TransactionDetailScreen(
     val splitMembers = row.splitMembers
     val isSplit = type == TransactionType.SPLIT
     val incomeLike = type == TransactionType.INCOME || type == TransactionType.FIXED_INCOME
+    val unpaidTotal = splitMembers
+        .filterNot { it.isPrimaryPayer }
+        .filterNot { it.isPaid }
+        .sumOf { it.agreedAmount ?: 0 }
 
     Scaffold(
         topBar = {
@@ -122,6 +126,11 @@ fun TransactionDetailScreen(
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                            Text(
+                                "미정산 금액 합계: ${formatMoney(unpaidTotal)}원",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 }
@@ -145,15 +154,19 @@ fun TransactionDetailScreen(
                                     )
                                 }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(if (member.isPaid) "정산완료" else "미정산")
-                                    Switch(
-                                        checked = member.isPaid,
-                                        onCheckedChange = {
-                                            onSplitMemberPaidToggle(
-                                                member.copy(isPaid = it, updatedAt = System.currentTimeMillis())
-                                            )
-                                        }
-                                    )
+                                    if (member.isPrimaryPayer) {
+                                        Text("본인 부담 완료")
+                                    } else {
+                                        Text(if (member.isPaid) "정산완료" else "미정산")
+                                        Switch(
+                                            checked = member.isPaid,
+                                            onCheckedChange = {
+                                                onSplitMemberPaidToggle(
+                                                    member.copy(isPaid = it, updatedAt = System.currentTimeMillis())
+                                                )
+                                            }
+                                        )
+                                    }
                                 }
                             }
                             HorizontalDivider()

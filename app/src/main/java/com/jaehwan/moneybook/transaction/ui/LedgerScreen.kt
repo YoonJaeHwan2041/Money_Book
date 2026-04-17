@@ -126,7 +126,15 @@ fun LedgerScreen(
             else -> 0
         }
     }
-    val monthlyBalance = monthlyIncome - monthlyExpense
+    val currentBalance = rows.sumOf { row ->
+        val amount = row.transaction.amount
+        when (TransactionType.fromKey(row.transaction.type)) {
+            TransactionType.INCOME -> amount
+            TransactionType.EXPENSE, TransactionType.SPLIT -> -amount
+            TransactionType.FIXED_INCOME -> if (row.transaction.isConfirmed) amount else 0
+            TransactionType.FIXED_EXPENSE -> if (row.transaction.isConfirmed) -amount else 0
+        }
+    }
     val categoryExpenses = monthlyRows
         .filter {
             val t = TransactionType.fromKey(it.transaction.type)
@@ -173,7 +181,7 @@ fun LedgerScreen(
             MonthlySummaryCard(
                 income = monthlyIncome,
                 expense = monthlyExpense,
-                balance = monthlyBalance,
+                balance = currentBalance,
             )
         }
         item {
@@ -277,7 +285,7 @@ private fun MonthlySummaryCard(
         colors = CardDefaults.cardColors(containerColor = Color(0xFF11C78B)),
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
-            Text("이번 달 잔액", color = Color.White, style = MaterialTheme.typography.titleMedium)
+            Text("현재 통장 잔고", color = Color.White, style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "${formatMoney(balance)}원",
@@ -563,18 +571,25 @@ private fun LedgerTransactionCard(
                                         )
                                     }
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = if (m.isPaid) "받음" else "미수",
-                                            style = MaterialTheme.typography.labelSmall
-                                        )
-                                        Switch(
-                                            checked = m.isPaid,
-                                            onCheckedChange = {
-                                                onSplitMemberPaidToggle(
-                                                    m.copy(isPaid = it, updatedAt = System.currentTimeMillis())
-                                                )
-                                            }
-                                        )
+                                        if (m.isPrimaryPayer) {
+                                            Text(
+                                                text = "본인 부담 완료",
+                                                style = MaterialTheme.typography.labelSmall
+                                            )
+                                        } else {
+                                            Text(
+                                                text = if (m.isPaid) "받음" else "미수",
+                                                style = MaterialTheme.typography.labelSmall
+                                            )
+                                            Switch(
+                                                checked = m.isPaid,
+                                                onCheckedChange = {
+                                                    onSplitMemberPaidToggle(
+                                                        m.copy(isPaid = it, updatedAt = System.currentTimeMillis())
+                                                    )
+                                                }
+                                            )
+                                        }
                                     }
                                 }
                             }
