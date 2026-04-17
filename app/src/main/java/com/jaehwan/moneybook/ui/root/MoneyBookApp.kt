@@ -1,5 +1,8 @@
 package com.jaehwan.moneybook.ui.root
 
+import android.app.Activity
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
@@ -29,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -51,6 +55,7 @@ import kotlinx.coroutines.delay
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
+    val context = LocalContext.current
     val ledgerViewModel: LedgerViewModel = hiltViewModel()
     val categories by viewModel.categories.collectAsState()
     val ledgerRows by ledgerViewModel.ledgerRows.collectAsState()
@@ -82,6 +87,41 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
     var splitEditorTransaction by remember { mutableStateOf<TransactionEntity?>(null) }
     var splitPrefill by remember { mutableStateOf<Triple<Int, Long, String?>?>(null) }
     var selectedDetailRow by remember { mutableStateOf<LedgerRow?>(null) }
+    var lastBackPressedAt by remember { mutableStateOf(0L) }
+
+    BackHandler {
+        when {
+            selectedDetailRow != null -> selectedDetailRow = null
+            showSplitEditor -> {
+                showSplitEditor = false
+                splitEditorTransaction = null
+                splitPrefill = null
+            }
+            showTransactionForm -> {
+                showTransactionForm = false
+                transactionBeingEdited = null
+            }
+            showCategoryForm -> {
+                showCategoryForm = false
+                categoryBeingEdited = null
+            }
+            transactionPendingDelete != null -> transactionPendingDelete = null
+            categoryPendingDelete != null -> categoryPendingDelete = null
+            workingPopup != null -> workingPopup = null
+            showLegacyLedgerInSettings -> showLegacyLedgerInSettings = false
+            showCategoryManager -> showCategoryManager = false
+            destination != MainDestination.Home -> destination = MainDestination.Home
+            else -> {
+                val now = System.currentTimeMillis()
+                if (now - lastBackPressedAt < 2000L) {
+                    (context as? Activity)?.finish()
+                } else {
+                    lastBackPressedAt = now
+                    Toast.makeText(context, "한 번 더 뒤로가기를 누르면 종료됩니다.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
