@@ -137,6 +137,7 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                     NavigationBarItem(
                         selected = destination == dest,
                         onClick = {
+                            selectedDetailRow = null
                             when (dest) {
                                 MainDestination.Home,
                                 MainDestination.Settings,

@@ -66,25 +66,46 @@ fun TransactionDetailScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = "${if (incomeLike) "+" else "-"}${formatMoney(tx.amount)}원",
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (incomeLike) Color(0xFF00B874) else Color(0xFFFF6363),
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        text = "${if (incomeLike) "+" else "-"}${formatMoney(tx.amount)}원",
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = if (incomeLike) Color(0xFF00B874) else Color(0xFFFF6363),
+                    )
+                    HorizontalDivider()
+                    DetailLine(label = "유형", value = type.label)
+                    DetailLine(label = "카테고리", value = row.categoryName)
+                    DetailLine(label = "날짜", value = formatDate(tx.expectedDate))
+                    if (type.isFixed) {
+                        DetailLine(
+                            label = "고정거래",
+                            value = "${if (tx.isConfirmed) "확정" else "미확정"} · 알람 ${if (tx.hasAlarm) "켜짐" else "꺼짐"}",
                         )
-                        Text("유형: ${type.label}", style = MaterialTheme.typography.bodyLarge)
-                        Text("카테고리: ${row.categoryName}", style = MaterialTheme.typography.bodyLarge)
-                        Text("날짜: ${formatDate(tx.expectedDate)}", style = MaterialTheme.typography.bodyLarge)
-                        Text("메모: ${tx.memo?.takeIf { it.isNotBlank() } ?: "없음"}", style = MaterialTheme.typography.bodyLarge)
-                        if (type.isFixed) {
-                            Text(
-                                "고정거래: ${if (tx.isConfirmed) "확정" else "미확정"} · 알람 ${if (tx.hasAlarm) "켜짐" else "꺼짐"}",
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                        }
                     }
+                }
+            }
+            item {
+                HorizontalDivider()
+            }
+            item {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = "메모",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = tx.memo?.takeIf { it.isNotBlank() } ?: "메모 없음",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
                 }
             }
             if (isSplit) {
@@ -143,6 +164,18 @@ fun TransactionDetailScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DetailLine(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
     }
 }
 
