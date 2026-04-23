@@ -228,15 +228,23 @@ fun LedgerScreen(
             )
         }
         items(items = recentRows, key = { it.transaction.id }) { row ->
-            LedgerTransactionCard(
-                row = row,
-                onEdit = { onEdit(row.transaction) },
-                onDeleteRequest = { onDeleteRequest(row.transaction) },
-                onSplitMemberPaidToggle = onSplitMemberPaidToggle,
-                onOpenDetail = { onOpenDetail(row) },
-                showActionButtons = showActionButtons,
-                allowInlineSplitExpand = allowInlineSplitExpand,
-            )
+            if (showActionButtons) {
+                LedgerTransactionCard(
+                    row = row,
+                    onEdit = { onEdit(row.transaction) },
+                    onDeleteRequest = { onDeleteRequest(row.transaction) },
+                    onSplitMemberPaidToggle = onSplitMemberPaidToggle,
+                    onOpenDetail = { onOpenDetail(row) },
+                    showActionButtons = true,
+                    allowInlineSplitExpand = allowInlineSplitExpand,
+                )
+            } else {
+                TradeTransactionRow(
+                    row = row,
+                    onOpenDetail = { onOpenDetail(row) },
+                    onSplitMemberPaidToggle = onSplitMemberPaidToggle,
+                )
+            }
         }
     }
 
@@ -292,106 +300,14 @@ private fun MonthlySummaryCard(
     balance: Int,
     installmentSummary: InstallmentSummary,
 ) {
-    var showInstallment by rememberSaveable { mutableStateOf(true) }
-    var mode by rememberSaveable { mutableStateOf(HomeSummaryMode.WithInstallment) }
-    val adjustedBalance = balance - installmentSummary.remainingTotal
-    val displayBalance = if (mode == HomeSummaryMode.WithInstallment) adjustedBalance else balance
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF11C78B)),
-    ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            Text(
-                if (mode == HomeSummaryMode.WithInstallment) "할부금 포함 금액" else "현재 통장 잔고",
-                color = Color.White,
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "${formatMoney(displayBalance)}원",
-                color = Color.White,
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            if (showInstallment) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "-${formatMoney(installmentSummary.remainingTotal)}원 · 할부 ${installmentSummary.activeCount}건",
-                    color = Color(0xFFFFD6D6),
-                    style = MaterialTheme.typography.labelLarge,
-                )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HomeSummaryMode.entries.forEach { item ->
-                        HomeSummaryModeChip(
-                            label = item.label,
-                            selected = item == mode,
-                            onClick = { mode = item },
-                        )
-                    }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("할부 표시", color = Color.White, style = MaterialTheme.typography.labelSmall)
-                    Switch(
-                        checked = showInstallment,
-                        onCheckedChange = { showInstallment = it },
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            MiniSummaryCard(
-                title = "총 수입",
-                amount = income,
-                positive = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MiniSummaryCard(
-                    title = "총 지출",
-                    amount = expense,
-                    positive = false,
-                    modifier = Modifier.weight(1f),
-                )
-                MiniSummaryCard(
-                    title = "총 할부",
-                    amount = installment,
-                    positive = false,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun MiniSummaryCard(
-    title: String,
-    amount: Int,
-    positive: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.12f)),
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(title, color = Color.White, style = MaterialTheme.typography.labelLarge)
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "${if (positive) "+" else "-"}${formatMoney(amount)}원",
-                color = Color.White,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
-        }
-    }
+    TransactionOverviewCard(
+        balance = balance,
+        income = income,
+        expense = expense,
+        installment = installment,
+        installmentSummary = installmentSummary,
+        rawBalanceTitle = "현재 통장 잔고",
+    )
 }
 
 @Composable
@@ -697,27 +613,3 @@ private enum class RecentFilter(val label: String) {
     Installment("할부"),
 }
 
-private enum class HomeSummaryMode(val label: String) {
-    WithInstallment("할부금 포함 금액"),
-    RawBalance("지금 잔고"),
-}
-
-@Composable
-private fun HomeSummaryModeChip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = if (selected) Color.White else Color.White.copy(alpha = 0.18f),
-        modifier = Modifier.clickable(onClick = onClick),
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-            style = MaterialTheme.typography.labelMedium,
-            color = if (selected) Color(0xFF0AA870) else Color.White,
-        )
-    }
-}

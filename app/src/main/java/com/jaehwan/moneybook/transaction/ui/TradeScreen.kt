@@ -186,12 +186,13 @@ fun TradeScreen(
             }
         }
         item {
-            TradeSummaryCard(
+            TransactionOverviewCard(
                 balance = globalBalance,
                 income = totalIncome,
                 expense = totalExpense,
                 installment = totalInstallment,
                 installmentSummary = installmentSummary,
+                rawBalanceTitle = "지금 잔고",
             )
         }
         item {
@@ -319,121 +320,6 @@ fun TradeScreen(
     }
 }
 
-@Composable
-private fun TradeSummaryCard(
-    balance: Int,
-    income: Int,
-    expense: Int,
-    installment: Int,
-    installmentSummary: InstallmentSummary,
-) {
-    var showInstallment by rememberSaveable { mutableStateOf(true) }
-    var showMode by rememberSaveable { mutableStateOf(SummaryMode.WithInstallment) }
-    val adjustedBalance = balance - installmentSummary.remainingTotal
-    val mainBalance = if (showMode == SummaryMode.WithInstallment) adjustedBalance else balance
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF11C78B)),
-    ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            Text(
-                text = if (showMode == SummaryMode.WithInstallment) "할부금 포함 금액" else "지금 잔고",
-                color = Color.White,
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Spacer(modifier = Modifier.size(8.dp))
-            Text(
-                text = "${if (mainBalance >= 0) "+" else "-"}${formatMoney(kotlin.math.abs(mainBalance))}원",
-                style = MaterialTheme.typography.headlineLarge,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-            )
-            if (showInstallment) {
-                Spacer(modifier = Modifier.size(4.dp))
-                Text(
-                    text = "-${formatMoney(installmentSummary.remainingTotal)}원 · 할부 ${installmentSummary.activeCount}건",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color(0xFFFFD6D6),
-                )
-            }
-            Spacer(modifier = Modifier.size(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SummaryMode.entries.forEach { mode ->
-                        TradeSummaryModeChip(
-                            label = mode.label,
-                            selected = showMode == mode,
-                            onClick = { showMode = mode },
-                        )
-                    }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("할부 표시", color = Color.White, style = MaterialTheme.typography.labelMedium)
-                    androidx.compose.material3.Switch(
-                        checked = showInstallment,
-                        onCheckedChange = { showInstallment = it },
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.size(12.dp))
-            TradeSummaryMiniCard(
-                modifier = Modifier.fillMaxWidth(),
-                title = "총 수입",
-                amount = income,
-                positive = true,
-            )
-            Spacer(modifier = Modifier.size(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TradeSummaryMiniCard(
-                    modifier = Modifier.weight(1f),
-                    title = "총 지출",
-                    amount = expense,
-                    positive = false,
-                )
-                TradeSummaryMiniCard(
-                    modifier = Modifier.weight(1f),
-                    title = "총 할부",
-                    amount = installment,
-                    positive = false,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun TradeSummaryMiniCard(
-    modifier: Modifier = Modifier,
-    title: String,
-    amount: Int,
-    positive: Boolean,
-) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.16f)),
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = title,
-                color = Color.White,
-                style = MaterialTheme.typography.labelLarge,
-            )
-            Spacer(modifier = Modifier.size(4.dp))
-            Text(
-                text = "${if (positive) "+" else "-"}${formatMoney(amount)}원",
-                color = if (positive) Color(0xFFD6FFED) else Color(0xFFFFE0E0),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}
 
 @Composable
 private fun FilterChip(
@@ -576,31 +462,6 @@ internal fun TradeTransactionRow(
                 )
             }
         }
-    }
-}
-
-private enum class SummaryMode(val label: String) {
-    WithInstallment("할부금 포함 금액"),
-    RawBalance("지금 잔고"),
-}
-
-@Composable
-private fun TradeSummaryModeChip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = if (selected) Color.White else Color.White.copy(alpha = 0.18f),
-        modifier = Modifier.clickable(onClick = onClick),
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-            style = MaterialTheme.typography.labelMedium,
-            color = if (selected) Color(0xFF0AA870) else Color.White,
-        )
     }
 }
 
