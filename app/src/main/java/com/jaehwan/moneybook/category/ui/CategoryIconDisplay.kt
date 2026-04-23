@@ -57,12 +57,28 @@ fun CategoryIconDisplay(
                         context.packageName,
                     )
                     if (resId != 0) {
-                        Image(
-                            painter = painterResource(id = resId),
-                            contentDescription = "Category Resource Icon",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop,
-                        )
+                        val painter = runCatching { painterResource(id = resId) }.getOrNull()
+                        if (painter != null) {
+                            Image(
+                                painter = painter,
+                                contentDescription = "Category Resource Icon",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.primaryContainer),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = resName.substringAfter("ic_").take(1).uppercase(),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
                     } else {
                         Box(
                             modifier = Modifier

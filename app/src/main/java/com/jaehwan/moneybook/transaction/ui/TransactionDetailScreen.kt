@@ -20,6 +20,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -42,12 +44,15 @@ fun TransactionDetailScreen(
     onDeleteRequest: (TransactionEntity) -> Unit,
     onSplitMemberPaidToggle: (SplitMemberEntity) -> Unit,
     onInstallmentPaidToggle: (InstallmentPaymentEntity) -> Unit,
+    loadInstallmentPayments: suspend (Long) -> List<InstallmentPaymentEntity>,
 ) {
     val tx = row.transaction
     val type = TransactionType.fromKey(tx.type)
     val splitMembers = row.splitMembers
     val installmentPlan = row.installmentPlan
-    val installmentPayments = row.installmentPayments
+    val installmentPayments by produceState(initialValue = emptyList<InstallmentPaymentEntity>(), key1 = tx.id, key2 = installmentPlan?.id) {
+        value = if (installmentPlan == null) emptyList() else loadInstallmentPayments(tx.id)
+    }
     val isSplit = type == TransactionType.SPLIT
     val incomeLike = type == TransactionType.INCOME || type == TransactionType.FIXED_INCOME
     val unpaidTotal = splitMembers

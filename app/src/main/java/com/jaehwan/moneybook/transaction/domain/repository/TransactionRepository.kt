@@ -2,7 +2,9 @@ package com.jaehwan.moneybook.transaction.domain.repository
 
 import com.jaehwan.moneybook.splitmember.data.local.SplitMemberEntity
 import com.jaehwan.moneybook.transaction.data.local.InstallmentPaymentEntity
+import com.jaehwan.moneybook.transaction.data.local.InstallmentPlanStatusSnapshot
 import com.jaehwan.moneybook.transaction.data.local.InstallmentPlanEntity
+import com.jaehwan.moneybook.transaction.data.local.InstallmentSummarySnapshot
 import com.jaehwan.moneybook.transaction.data.local.TransactionEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -11,7 +13,8 @@ interface TransactionRepository {
 
     val allSplitMembers: Flow<List<SplitMemberEntity>>
     val allInstallmentPlans: Flow<List<InstallmentPlanEntity>>
-    val allInstallmentPayments: Flow<List<InstallmentPaymentEntity>>
+    val installmentSummary: Flow<InstallmentSummarySnapshot>
+    val installmentPlanStatuses: Flow<List<InstallmentPlanStatusSnapshot>>
 
     suspend fun insertTransaction(transaction: TransactionEntity): Long
 

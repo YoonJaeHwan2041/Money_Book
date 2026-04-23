@@ -11,6 +11,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -31,21 +32,24 @@ class LedgerViewModel @Inject constructor(
         categoryRepository.allCategories,
         transactionRepository.allSplitMembers,
         transactionRepository.allInstallmentPlans,
-        transactionRepository.allInstallmentPayments,
-    ) { transactions, categories, splitMembers, installmentPlans, installmentPayments ->
+        transactionRepository.installmentPlanStatuses,
+    ) { transactions, categories, splitMembers, installmentPlans, installmentStatuses ->
         val byId = categories.associateBy { it.id }
         val membersByTx = splitMembers.groupBy { it.transactionId }
         val planByTxId = installmentPlans.associateBy { it.transactionId }
-        val paymentsByPlanId = installmentPayments.groupBy { it.planId }
+        val statusByTx = installmentStatuses.associateBy { it.transactionId }
         transactions.map { tx ->
             val plan = planByTxId[tx.id]
+            val status = statusByTx[tx.id]
             LedgerRow(
                 transaction = tx,
                 categoryName = byId[tx.categoryId]?.name ?: "(알 수 없음)",
                 categoryIconKey = byId[tx.categoryId]?.iconKey,
                 splitMembers = membersByTx[tx.id].orEmpty(),
                 installmentPlan = plan,
-                installmentPayments = plan?.let { paymentsByPlanId[it.id].orEmpty() }.orEmpty(),
+                installmentTotalCount = status?.totalCount ?: 0,
+                installmentPaidCount = status?.paidCount ?: 0,
+                installmentRemainingAmount = status?.remainingAmount ?: 0,
             )
         }
     }.stateIn(
@@ -54,18 +58,11 @@ class LedgerViewModel @Inject constructor(
         initialValue = emptyList()
     )
 
-    val installmentSummary: StateFlow<InstallmentSummary> = transactionRepository.allInstallmentPayments
-        .combine(transactionRepository.allInstallmentPlans) { payments, plans ->
-            val unpaidByPlan = payments
-                .filter { !it.isPaid }
-                .groupBy { it.planId }
-            val remainingTotal = unpaidByPlan.values.flatten().sumOf { it.amount }
-            val activeCount = plans.count { plan ->
-                unpaidByPlan[plan.id].isNullOrEmpty().not()
-            }
+    val installmentSummary: StateFlow<InstallmentSummary> = transactionRepository.installmentSummary
+        .map { snapshot ->
             InstallmentSummary(
-                remainingTotal = remainingTotal,
-                activeCount = activeCount,
+                remainingTotal = snapshot.remainingTotal,
+                activeCount = snapshot.activeCount,
             )
         }
         .stateIn(

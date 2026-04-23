@@ -17,6 +17,30 @@ interface InstallmentDao {
 
     @Query(
         """
+        SELECT
+            COALESCE(SUM(CASE WHEN is_paid = 0 THEN amount ELSE 0 END), 0) AS remainingTotal,
+            COALESCE(COUNT(DISTINCT CASE WHEN is_paid = 0 THEN plan_id END), 0) AS activeCount
+        FROM installment_payment
+        """
+    )
+    fun getInstallmentSummary(): Flow<InstallmentSummarySnapshot>
+
+    @Query(
+        """
+        SELECT
+            ip.transaction_id AS transactionId,
+            COUNT(p.id) AS totalCount,
+            COALESCE(SUM(CASE WHEN p.is_paid = 1 THEN 1 ELSE 0 END), 0) AS paidCount,
+            COALESCE(SUM(CASE WHEN p.is_paid = 0 THEN p.amount ELSE 0 END), 0) AS remainingAmount
+        FROM installment_plan ip
+        LEFT JOIN installment_payment p ON p.plan_id = ip.id
+        GROUP BY ip.id
+        """
+    )
+    fun getPlanStatusSnapshots(): Flow<List<InstallmentPlanStatusSnapshot>>
+
+    @Query(
+        """
         SELECT p.* FROM installment_payment p
         INNER JOIN installment_plan ip ON ip.id = p.plan_id
         WHERE ip.transaction_id = :transactionId

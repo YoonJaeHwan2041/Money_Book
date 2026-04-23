@@ -30,8 +30,11 @@ class TransactionRepositoryImpl @Inject constructor(
     override val allInstallmentPlans: Flow<List<InstallmentPlanEntity>> =
         installmentDao.getAllPlans()
 
-    override val allInstallmentPayments: Flow<List<InstallmentPaymentEntity>> =
-        installmentDao.getAllPayments()
+    override val installmentSummary: Flow<InstallmentSummarySnapshot> =
+        installmentDao.getInstallmentSummary()
+
+    override val installmentPlanStatuses: Flow<List<InstallmentPlanStatusSnapshot>> =
+        installmentDao.getPlanStatusSnapshots()
 
     override suspend fun insertTransaction(transaction: TransactionEntity): Long =
         transactionDao.insertTransaction(transaction)

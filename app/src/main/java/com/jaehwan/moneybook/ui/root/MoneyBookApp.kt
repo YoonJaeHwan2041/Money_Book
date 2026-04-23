@@ -493,6 +493,9 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                     },
                     onSplitMemberPaidToggle = { member -> ledgerViewModel.updateSplitMember(member) },
                     onInstallmentPaidToggle = { payment -> ledgerViewModel.updateInstallmentPayment(payment) },
+                    loadInstallmentPayments = { transactionId ->
+                        ledgerViewModel.getInstallmentPayments(transactionId)
+                    },
                 )
             }
         }

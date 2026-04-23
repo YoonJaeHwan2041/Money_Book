@@ -22,7 +22,7 @@ class CategoryRepositoryImpl @Inject constructor(
             CategoryEntity(name = "유흥", iconKey = "res:entertainment", isDefault = true),
             CategoryEntity(name = "편의점", iconKey = "res:convenience", isDefault = true),
             CategoryEntity(name = "게임", iconKey = "res:game", isDefault = true),
-            CategoryEntity(name = "주거/공과금", iconKey = "res:utilities", isDefault = true),
+            CategoryEntity(name = "고정지출", iconKey = "res:pigibank", isDefault = true),
             CategoryEntity(name = "외식", iconKey = "res:food", isDefault = true),
             CategoryEntity(name = "월급", iconKey = "res:give_money", isDefault = true),
             CategoryEntity(name = "여행", iconKey = "res:airplane", isDefault = true),
@@ -32,6 +32,16 @@ class CategoryRepositoryImpl @Inject constructor(
         }
         if (missing.isNotEmpty()) {
             categoryDao.insertCategories(missing)
+        }
+
+        val fixedExpense = categoryDao.getCategoryByName("고정지출")
+        if (fixedExpense != null && fixedExpense.iconKey != "res:pigibank") {
+            categoryDao.updateCategory(
+                fixedExpense.copy(
+                    iconKey = "res:pigibank",
+                    updatedAt = System.currentTimeMillis(),
+                )
+            )
         }
     }
 

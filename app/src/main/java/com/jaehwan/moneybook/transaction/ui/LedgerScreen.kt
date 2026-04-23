@@ -27,6 +27,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -113,38 +114,53 @@ fun LedgerScreen(
             }
         }
     }
-    val monthlyRows = rows.filter { it.isInMonth(selectedMonth) }
-    val monthlyTotals = calculateMonthlyTotals(monthlyRows)
+    val monthlyRows by remember(rows, selectedMonth) {
+        derivedStateOf { rows.filter { it.isInMonth(selectedMonth) } }
+    }
+    val monthlyTotals by remember(monthlyRows) {
+        derivedStateOf { calculateMonthlyTotals(monthlyRows) }
+    }
     val monthlyIncome = monthlyTotals.income
     val monthlyExpense = monthlyTotals.expense
     val currentBalance = calculateCurrentBalance(rows)
-    val categoryExpenses = monthlyRows
-        .filter {
-            val t = TransactionType.fromKey(it.transaction.type)
-            t == TransactionType.EXPENSE || t == TransactionType.INSTALLMENT || t == TransactionType.SPLIT ||
-                (t == TransactionType.FIXED_EXPENSE && it.transaction.isConfirmed)
+    val categoryExpenses by remember(monthlyRows) {
+        derivedStateOf {
+            monthlyRows
+                .asSequence()
+                .filter {
+                    val t = TransactionType.fromKey(it.transaction.type)
+                    t == TransactionType.EXPENSE || t == TransactionType.INSTALLMENT || t == TransactionType.SPLIT ||
+                        (t == TransactionType.FIXED_EXPENSE && it.transaction.isConfirmed)
+                }
+                .groupBy { Triple(it.transaction.categoryId, it.categoryName, it.categoryIconKey) }
+                .map { (key, list) ->
+                    CategoryExpenseItem(
+                        categoryName = key.second,
+                        categoryIconKey = key.third,
+                        amount = list.sumOf { it.transaction.amount },
+                    )
+                }
+                .sortedByDescending { it.amount }
+                .take(5)
         }
-        .groupBy { Triple(it.transaction.categoryId, it.categoryName, it.categoryIconKey) }
-        .map { (key, list) ->
-            CategoryExpenseItem(
-                categoryName = key.second,
-                categoryIconKey = key.third,
-                amount = list.sumOf { it.transaction.amount },
-            )
-        }
-        .sortedByDescending { it.amount }
-        .take(5)
+    }
     var recentFilter by rememberSaveable { mutableStateOf(RecentFilter.All) }
-    val recentRows = monthlyRows
-        .filter {
-            when (recentFilter) {
-                RecentFilter.All -> true
-                RecentFilter.Income -> isIncomeLike(TransactionType.fromKey(it.transaction.type))
-                RecentFilter.Expense -> !isIncomeLike(TransactionType.fromKey(it.transaction.type))
-            }
+    val recentRows by remember(monthlyRows, recentFilter) {
+        derivedStateOf {
+            monthlyRows
+                .asSequence()
+                .filter {
+                    when (recentFilter) {
+                        RecentFilter.All -> true
+                        RecentFilter.Income -> isIncomeLike(TransactionType.fromKey(it.transaction.type))
+                        RecentFilter.Expense -> !isIncomeLike(TransactionType.fromKey(it.transaction.type))
+                    }
+                }
+                .sortedByDescending { it.transaction.expectedDate }
+                .take(10)
+                .toList()
         }
-        .sortedByDescending { it.transaction.expectedDate }
-        .take(10)
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),

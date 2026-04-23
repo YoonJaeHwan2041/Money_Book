@@ -35,6 +35,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -88,31 +89,45 @@ fun TradeScreen(
     var selectedType by rememberSaveable { mutableStateOf(TradeTypeTab.All) }
     var selectedCategory by rememberSaveable { mutableStateOf<String?>(null) }
 
-    val rowsByMonth = rows.filter { it.isInMonth(selectedMonth) }
-    val availableCategories = rowsByMonth.map { it.categoryName }.distinct().sorted()
-    val filteredRows = rowsByMonth
-        .filter { row ->
-            selectedCategory == null || row.categoryName == selectedCategory
+    val rowsByMonth by remember(rows, selectedMonth) {
+        derivedStateOf { rows.filter { it.isInMonth(selectedMonth) } }
+    }
+    val availableCategories by remember(rowsByMonth) {
+        derivedStateOf { rowsByMonth.map { it.categoryName }.distinct().sorted() }
+    }
+    val filteredRows by remember(rowsByMonth, selectedCategory, selectedType, query) {
+        derivedStateOf {
+            rowsByMonth
+                .asSequence()
+                .filter { row -> selectedCategory == null || row.categoryName == selectedCategory }
+                .filter { row ->
+                    when (selectedType) {
+                        TradeTypeTab.All -> true
+                        TradeTypeTab.Income -> isIncomeType(row.transaction.type)
+                        TradeTypeTab.Expense -> !isIncomeType(row.transaction.type)
+                    }
+                }
+                .filter { row -> matchesSearch(row, query) }
+                .sortedByDescending { it.transaction.expectedDate }
+                .toList()
         }
-        .filter { row ->
-            when (selectedType) {
-                TradeTypeTab.All -> true
-                TradeTypeTab.Income -> isIncomeType(row.transaction.type)
-                TradeTypeTab.Expense -> !isIncomeType(row.transaction.type)
-            }
-        }
-        .filter { row -> matchesSearch(row, query) }
-        .sortedByDescending { it.transaction.expectedDate }
+    }
 
-    val totalIncome = filteredRows
-        .filter { isIncomeType(it.transaction.type) }
-        .sumOf { it.transaction.amount }
-    val totalExpense = filteredRows
-        .filter { !isIncomeType(it.transaction.type) }
-        .sumOf { it.transaction.amount }
+    val totalIncome by remember(filteredRows) {
+        derivedStateOf {
+            filteredRows.filter { isIncomeType(it.transaction.type) }.sumOf { it.transaction.amount }
+        }
+    }
+    val totalExpense by remember(filteredRows) {
+        derivedStateOf {
+            filteredRows.filter { !isIncomeType(it.transaction.type) }.sumOf { it.transaction.amount }
+        }
+    }
     val globalBalance = calculateCurrentBalance(rows)
 
-    val groupedByDate = filteredRows.groupBy { formatDate(it.transaction.expectedDate) }
+    val groupedByDate by remember(filteredRows) {
+        derivedStateOf { filteredRows.groupBy { formatDate(it.transaction.expectedDate) } }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -436,12 +451,11 @@ internal fun TradeTransactionRow(
     val isSplit = type == TransactionType.SPLIT
     val hasMemo = !tx.memo.isNullOrBlank()
     var splitExpanded by rememberSaveable(tx.id) { mutableStateOf(false) }
-    var installmentExpanded by rememberSaveable(tx.id) { mutableStateOf(false) }
     val members = row.splitMembers
-    val installments = row.installmentPayments
     val hasInstallment = row.installmentPlan != null
-    val installmentPaidCount = installments.count { it.isPaid }
-    val installmentRemaining = installments.filterNot { it.isPaid }.sumOf { it.amount }
+    val installmentPaidCount = row.installmentPaidCount
+    val installmentRemaining = row.installmentRemainingAmount
+    val installmentTotalCount = row.installmentTotalCount
     val splitDone = isSplitComplete(members)
     val baseColor = when {
         hasInstallment -> Color(0xFFFFF1F1)
@@ -502,15 +516,6 @@ internal fun TradeTransactionRow(
                                 .clickable { splitExpanded = !splitExpanded },
                         )
                     }
-                    if (hasInstallment && !selectionMode) {
-                        Icon(
-                            imageVector = if (installmentExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                            contentDescription = "할부 내역 펼치기",
-                            modifier = Modifier
-                                .padding(start = 4.dp)
-                                .clickable { installmentExpanded = !installmentExpanded },
-                        )
-                    }
                 }
             }
             if (hasInstallment && !selectionMode) {
@@ -522,37 +527,10 @@ internal fun TradeTransactionRow(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Text(
-                        text = "할부 진행 ${installmentPaidCount} / ${installments.size} · 잔액 ${formatMoney(installmentRemaining)}원",
+                        text = "할부 진행 ${installmentPaidCount} / ${installmentTotalCount} · 잔액 ${formatMoney(installmentRemaining)}원",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    androidx.compose.animation.AnimatedVisibility(visible = installmentExpanded) {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            installments.forEach { payment ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                ) {
-                                    Text(
-                                        text = "${payment.sequenceNo}회차 · ${formatDate(payment.dueDate)} · ${formatMoney(payment.amount)}원",
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                    androidx.compose.material3.Switch(
-                                        checked = payment.isPaid,
-                                        onCheckedChange = { checked ->
-                                            onInstallmentPaidToggle(
-                                                payment.copy(
-                                                    isPaid = checked,
-                                                    paidAt = if (checked) System.currentTimeMillis() else null,
-                                                )
-                                            )
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                    }
                 }
             }
             if (isSplit && !selectionMode) {
