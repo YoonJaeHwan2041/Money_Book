@@ -44,6 +44,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
 import com.jaehwan.moneybook.category.data.local.CategoryEntity
+import com.jaehwan.moneybook.transaction.data.local.InstallmentPlanEntity
 import com.jaehwan.moneybook.splitmember.data.local.SplitMemberEntity
 import com.jaehwan.moneybook.transaction.data.local.TransactionEntity
 import com.jaehwan.moneybook.transaction.domain.model.TransactionType
@@ -59,18 +60,30 @@ private data class SplitMemberDraft(
     var memoText: String,
 )
 
+data class TransactionInstallmentInput(
+    val totalAmount: Int,
+    val months: Int,
+    val startDate: Long,
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionEntryScreen(
     categories: List<CategoryEntity>,
     initial: TransactionEntity?,
+    initialInstallmentPlan: InstallmentPlanEntity?,
     onDismiss: () -> Unit,
-    onSaveNormal: (TransactionEntity) -> Unit,
+    onSaveNormal: (TransactionEntity, TransactionInstallmentInput?) -> Unit,
     onSaveSplit: (TransactionEntity, List<SplitMemberEntity>) -> Unit,
 ) {
     val isEdit = initial != null
     var selectedType by remember(initial?.id) {
-        mutableStateOf(initial?.let { TransactionType.fromKey(it.type) } ?: TransactionType.EXPENSE)
+        mutableStateOf(
+            initial?.let { tx ->
+                if (initialInstallmentPlan != null) TransactionType.INSTALLMENT
+                else TransactionType.fromKey(tx.type)
+            } ?: TransactionType.EXPENSE
+        )
     }
     var amountText by remember(initial?.id) { mutableStateOf(initial?.amount?.let { formatAmountInput(it.toString()) }.orEmpty()) }
     var categoryId by remember(initial?.id) { mutableStateOf(initial?.categoryId ?: categories.firstOrNull()?.id ?: 0L) }
@@ -79,6 +92,13 @@ fun TransactionEntryScreen(
     var hasAlarm by remember(initial?.id) { mutableStateOf(initial?.hasAlarm ?: false) }
     var expectedDateMillis by remember(initial?.id) { mutableLongStateOf(initial?.expectedDate ?: startOfDayMillis()) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var installmentMonthsText by remember(initial?.id) {
+        mutableStateOf(initialInstallmentPlan?.months?.toString() ?: "3")
+    }
+    var installmentStartDateMillis by remember(initial?.id) {
+        mutableLongStateOf(initialInstallmentPlan?.startDate ?: expectedDateMillis)
+    }
+    var showInstallmentDatePicker by remember { mutableStateOf(false) }
     var participantCountText by remember(initial?.id) { mutableStateOf("2") }
     var selfAmountText by remember { mutableStateOf("") }
     var bulkAmountText by remember { mutableStateOf("") }
@@ -125,6 +145,10 @@ fun TransactionEntryScreen(
     val othersTotal = memberDrafts.sumOf { parseAmountInput(it.amountText) ?: 0 }
     val distributedTotal = selfAmount + othersTotal
     val droppedAmount = (parsedAmount - distributedTotal).coerceAtLeast(0)
+    val installmentStartLabel = remember(installmentStartDateMillis) {
+        val d = Instant.ofEpochMilli(installmentStartDateMillis).atZone(ZoneId.systemDefault()).toLocalDate()
+        DateTimeFormatter.ISO_LOCAL_DATE.format(d)
+    }
     val dateLabel = remember(expectedDateMillis) {
         val d = Instant.ofEpochMilli(expectedDateMillis).atZone(ZoneId.systemDefault()).toLocalDate()
         DateTimeFormatter.ISO_LOCAL_DATE.format(d)
@@ -141,6 +165,22 @@ fun TransactionEntryScreen(
                 }) { Text("확인") }
             },
             dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("취소") } }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
+    if (showInstallmentDatePicker) {
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = installmentStartDateMillis)
+        DatePickerDialog(
+            onDismissRequest = { showInstallmentDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { installmentStartDateMillis = it }
+                    showInstallmentDatePicker = false
+                }) { Text("확인") }
+            },
+            dismissButton = { TextButton(onClick = { showInstallmentDatePicker = false }) { Text("취소") } }
         ) {
             DatePicker(state = datePickerState)
         }
@@ -164,20 +204,42 @@ fun TransactionEntryScreen(
                             if (amount <= 0 || categoryId == 0L) return@TextButton
                             val now = System.currentTimeMillis()
                             val txType = selectedType
+                            val isInstallmentEnabled = txType == TransactionType.INSTALLMENT
+                            val installmentMonths = installmentMonthsText.toIntOrNull()?.coerceAtLeast(1) ?: 0
+                            val installmentTotal = amount
+                            if (isInstallmentEnabled) {
+                                if (installmentMonths <= 0) {
+                                    formError = "할부 개월 수를 1 이상으로 입력해 주세요."
+                                    return@TextButton
+                                }
+                            }
+                            val resolvedExpectedDate = when {
+                                txType.isFixed -> expectedDateMillis
+                                else -> mergeSelectedDateWithCurrentTime(expectedDateMillis)
+                            }
                             val entity = TransactionEntity(
                                 id = initial?.id ?: 0L,
                                 categoryId = categoryId,
                                 amount = amount,
                                 type = txType.key,
                                 isConfirmed = if (txType.isFixed) isConfirmed else true,
-                                expectedDate = if (txType.isFixed) expectedDateMillis else startOfDayMillis(),
+                                expectedDate = resolvedExpectedDate,
                                 hasAlarm = if (txType.isFixed) hasAlarm else false,
                                 memo = memoText.trim().ifEmpty { null },
                                 createdAt = initial?.createdAt ?: now,
                                 updatedAt = now,
                             )
                             if (txType != TransactionType.SPLIT) {
-                                onSaveNormal(entity)
+                                val installmentInput = if (isInstallmentEnabled) {
+                                    TransactionInstallmentInput(
+                                        totalAmount = installmentTotal,
+                                        months = installmentMonths,
+                                        startDate = installmentStartDateMillis,
+                                    )
+                                } else {
+                                    null
+                                }
+                                onSaveNormal(entity, installmentInput)
                                 return@TextButton
                             }
                             if (memberDrafts.isEmpty()) return@TextButton
@@ -290,6 +352,35 @@ fun TransactionEntryScreen(
                     .focusScrollToVerticalBiasInViewport(formScrollState, { formViewportCoords }, formScrollScope),
                 label = { Text("메모 (선택)") },
             )
+
+            if (!selectedType.isFixed) {
+                Text("거래일: $dateLabel")
+                TextButton(onClick = { showDatePicker = true }) { Text("날짜 선택") }
+            }
+
+            if (selectedType == TransactionType.INSTALLMENT) {
+                HorizontalDivider()
+                OutlinedTextField(
+                    value = installmentMonthsText,
+                    onValueChange = {
+                        installmentMonthsText = it.filter { ch -> ch.isDigit() }.take(2)
+                        formError = null
+                    },
+                    label = { Text("할부 개월 수") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusScrollToVerticalBiasInViewport(formScrollState, { formViewportCoords }, formScrollScope),
+                    singleLine = true,
+                )
+                val installmentMonths = installmentMonthsText.toIntOrNull()?.coerceAtLeast(1) ?: 1
+                Text(
+                    text = "월 납입금(자동): ${formatMoney((parseAmountInput(amountText) ?: 0) / installmentMonths)}원",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text("할부 시작일: $installmentStartLabel")
+                TextButton(onClick = { showInstallmentDatePicker = true }) { Text("할부 시작일 선택") }
+            }
 
             if (selectedType.isFixed) {
                 Text("예정일: $dateLabel")
@@ -462,9 +553,3 @@ private fun formatAmountInput(value: String): String {
 
 private fun formatMoney(amount: Int): String =
     com.jaehwan.moneybook.transaction.domain.formatMoney(amount)
-
-private fun startOfDayMillis(): Long =
-    java.time.LocalDate.now()
-        .atStartOfDay(ZoneId.systemDefault())
-        .toInstant()
-        .toEpochMilli()

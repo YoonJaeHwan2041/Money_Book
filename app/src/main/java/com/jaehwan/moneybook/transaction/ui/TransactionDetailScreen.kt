@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.jaehwan.moneybook.transaction.data.local.InstallmentPaymentEntity
 import com.jaehwan.moneybook.splitmember.data.local.SplitMemberEntity
 import com.jaehwan.moneybook.transaction.domain.model.TransactionType
 import java.time.Instant
@@ -37,10 +38,13 @@ fun TransactionDetailScreen(
     row: LedgerRow,
     onBack: () -> Unit,
     onSplitMemberPaidToggle: (SplitMemberEntity) -> Unit,
+    onInstallmentPaidToggle: (InstallmentPaymentEntity) -> Unit,
 ) {
     val tx = row.transaction
     val type = TransactionType.fromKey(tx.type)
     val splitMembers = row.splitMembers
+    val installmentPlan = row.installmentPlan
+    val installmentPayments = row.installmentPayments
     val isSplit = type == TransactionType.SPLIT
     val incomeLike = type == TransactionType.INCOME || type == TransactionType.FIXED_INCOME
     val unpaidTotal = splitMembers
@@ -168,6 +172,60 @@ fun TransactionDetailScreen(
                             HorizontalDivider()
                             Text("추가금 ${formatMoney(member.extraAmount ?: 0)}원 / 차감 ${formatMoney(member.deductionAmount ?: 0)}원")
                             Text("메모: ${member.paymentMemo?.takeIf { it.isNotBlank() } ?: "없음"}")
+                        }
+                    }
+                }
+            }
+            if (installmentPlan != null) {
+                item {
+                    HorizontalDivider()
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF1F1))
+                    ) {
+                        val paidCount = installmentPayments.count { it.isPaid }
+                        val remaining = installmentPayments.filterNot { it.isPaid }.sumOf { it.amount }
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("할부 정보", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("총 할부금: ${formatMoney(installmentPlan.totalAmount)}원")
+                            Text("진행 회차: $paidCount / ${installmentPlan.months}")
+                            Text("남은 원금: ${formatMoney(remaining)}원")
+                        }
+                    }
+                }
+                items(installmentPayments, key = { it.id }) { payment ->
+                    Card {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    text = "${payment.sequenceNo}회차 · ${formatDate(payment.dueDate)}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    text = "${formatMoney(payment.amount)}원",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(if (payment.isPaid) "납부완료" else "미납")
+                                Switch(
+                                    checked = payment.isPaid,
+                                    onCheckedChange = { checked ->
+                                        onInstallmentPaidToggle(
+                                            payment.copy(
+                                                isPaid = checked,
+                                                paidAt = if (checked) System.currentTimeMillis() else null,
+                                            )
+                                        )
+                                    }
+                                )
+                            }
                         }
                     }
                 }

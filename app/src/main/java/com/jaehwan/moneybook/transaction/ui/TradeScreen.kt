@@ -33,6 +33,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,6 +46,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.jaehwan.moneybook.category.ui.CategoryIconDisplay
+import com.jaehwan.moneybook.transaction.data.local.InstallmentPaymentEntity
 import com.jaehwan.moneybook.splitmember.data.local.SplitMemberEntity
 import com.jaehwan.moneybook.transaction.domain.model.TransactionType
 import java.time.Instant
@@ -55,9 +57,12 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun TradeScreen(
     rows: List<LedgerRow>,
+    installmentSummary: InstallmentSummary,
     onAddClick: () -> Unit,
     onOpenDetail: (LedgerRow) -> Unit,
     onSplitMemberPaidToggle: (SplitMemberEntity) -> Unit,
+    onInstallmentPaidToggle: (InstallmentPaymentEntity) -> Unit,
+    onOpenAllTransactions: () -> Unit,
 ) {
     if (rows.isEmpty()) {
         Column(
@@ -68,6 +73,9 @@ fun TradeScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text("거래 데이터가 없습니다.", style = MaterialTheme.typography.bodyLarge)
+            TextButton(onClick = onOpenAllTransactions, modifier = Modifier.padding(top = 12.dp)) {
+                Text("전체 거래 보기")
+            }
         }
         return
     }
@@ -133,18 +141,32 @@ fun TradeScreen(
             }
         }
         item {
-            MonthSelectorBar(
-                selectedMonth = selectedMonth,
-                onChangeMonth = { selectedMonth = it },
-                onOpenPicker = { showMonthPicker = true },
-                monthText = "%04d.%02d".format(selectedMonth.year, selectedMonth.monthValue),
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    MonthSelectorBar(
+                        selectedMonth = selectedMonth,
+                        onChangeMonth = { selectedMonth = it },
+                        onOpenPicker = { showMonthPicker = true },
+                        monthText = "%04d.%02d".format(selectedMonth.year, selectedMonth.monthValue),
+                    )
+                }
+                TextButton(
+                    onClick = onOpenAllTransactions,
+                    modifier = Modifier.padding(start = 4.dp),
+                ) {
+                    Text("전체 거래 보기", style = MaterialTheme.typography.labelLarge)
+                }
+            }
         }
         item {
             TradeSummaryCard(
                 balance = globalBalance,
                 income = totalIncome,
                 expense = totalExpense,
+                installmentSummary = installmentSummary,
             )
         }
         item {
@@ -253,6 +275,7 @@ fun TradeScreen(
                         row = row,
                         onOpenDetail = { onOpenDetail(row) },
                         onSplitMemberPaidToggle = onSplitMemberPaidToggle,
+                        onInstallmentPaidToggle = onInstallmentPaidToggle,
                     )
                 }
             }
@@ -276,24 +299,60 @@ private fun TradeSummaryCard(
     balance: Int,
     income: Int,
     expense: Int,
+    installmentSummary: InstallmentSummary,
 ) {
+    var showInstallment by rememberSaveable { mutableStateOf(true) }
+    var showMode by rememberSaveable { mutableStateOf(SummaryMode.WithInstallment) }
+    val adjustedBalance = balance - installmentSummary.remainingTotal
+    val mainBalance = if (showMode == SummaryMode.WithInstallment) adjustedBalance else balance
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF11C78B)),
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Text(
-                text = "현재 잔고(전체)",
+                text = if (showMode == SummaryMode.WithInstallment) "할부금 포함 금액" else "지금 잔고",
                 color = Color.White,
                 style = MaterialTheme.typography.titleMedium,
             )
             Spacer(modifier = Modifier.size(8.dp))
             Text(
-                text = "${if (balance >= 0) "+" else "-"}${formatMoney(kotlin.math.abs(balance))}원",
+                text = "${if (mainBalance >= 0) "+" else "-"}${formatMoney(kotlin.math.abs(mainBalance))}원",
                 style = MaterialTheme.typography.headlineLarge,
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
             )
+            if (showInstallment) {
+                Spacer(modifier = Modifier.size(4.dp))
+                Text(
+                    text = "-${formatMoney(installmentSummary.remainingTotal)}원 · 할부 ${installmentSummary.activeCount}건",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color(0xFFFFD6D6),
+                )
+            }
+            Spacer(modifier = Modifier.size(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SummaryMode.entries.forEach { mode ->
+                        FilterChip(
+                            label = mode.label,
+                            selected = showMode == mode,
+                            onClick = { showMode = mode },
+                        )
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("할부 표시", color = Color.White, style = MaterialTheme.typography.labelMedium)
+                    androidx.compose.material3.Switch(
+                        checked = showInstallment,
+                        onCheckedChange = { showInstallment = it },
+                    )
+                }
+            }
             Spacer(modifier = Modifier.size(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TradeSummaryMiniCard(
@@ -362,10 +421,14 @@ private fun FilterChip(
 }
 
 @Composable
-private fun TradeTransactionRow(
+internal fun TradeTransactionRow(
     row: LedgerRow,
     onOpenDetail: () -> Unit,
     onSplitMemberPaidToggle: (SplitMemberEntity) -> Unit,
+    onInstallmentPaidToggle: (InstallmentPaymentEntity) -> Unit = {},
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    onToggleSelect: (() -> Unit)? = null,
 ) {
     val tx = row.transaction
     val income = isIncomeType(tx.type)
@@ -373,13 +436,26 @@ private fun TradeTransactionRow(
     val isSplit = type == TransactionType.SPLIT
     val hasMemo = !tx.memo.isNullOrBlank()
     var splitExpanded by rememberSaveable(tx.id) { mutableStateOf(false) }
+    var installmentExpanded by rememberSaveable(tx.id) { mutableStateOf(false) }
     val members = row.splitMembers
+    val installments = row.installmentPayments
+    val hasInstallment = row.installmentPlan != null
+    val installmentPaidCount = installments.count { it.isPaid }
+    val installmentRemaining = installments.filterNot { it.isPaid }.sumOf { it.amount }
     val splitDone = isSplitComplete(members)
-    val containerColor = when {
+    val baseColor = when {
+        hasInstallment -> Color(0xFFFFF1F1)
         isSplit && splitDone -> Color(0xFFE9FFF3)
         isSplit -> Color(0xFFF4EEFF)
         hasMemo -> Color(0xFFFFF9DB)
         else -> MaterialTheme.colorScheme.surface
+    }
+    val containerColor = when {
+        selectionMode && selected -> Color(0xFFFFCDD2)
+        else -> baseColor
+    }
+    val onMainRowClick: () -> Unit = {
+        if (selectionMode) onToggleSelect?.invoke() else onOpenDetail()
     }
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -389,7 +465,7 @@ private fun TradeTransactionRow(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(onClick = onOpenDetail)
+                    .clickable(onClick = onMainRowClick)
                     .padding(14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
@@ -417,7 +493,7 @@ private fun TradeTransactionRow(
                         color = if (income) Color(0xFF00B874) else Color(0xFFFF6363),
                         fontWeight = FontWeight.Bold,
                     )
-                    if (isSplit) {
+                    if (isSplit && !selectionMode) {
                         Icon(
                             imageVector = if (splitExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                             contentDescription = "스플릿 펼치기",
@@ -426,9 +502,60 @@ private fun TradeTransactionRow(
                                 .clickable { splitExpanded = !splitExpanded },
                         )
                     }
+                    if (hasInstallment && !selectionMode) {
+                        Icon(
+                            imageVector = if (installmentExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = "할부 내역 펼치기",
+                            modifier = Modifier
+                                .padding(start = 4.dp)
+                                .clickable { installmentExpanded = !installmentExpanded },
+                        )
+                    }
                 }
             }
-            if (isSplit) {
+            if (hasInstallment && !selectionMode) {
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 14.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        text = "할부 진행 ${installmentPaidCount} / ${installments.size} · 잔액 ${formatMoney(installmentRemaining)}원",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    androidx.compose.animation.AnimatedVisibility(visible = installmentExpanded) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            installments.forEach { payment ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Text(
+                                        text = "${payment.sequenceNo}회차 · ${formatDate(payment.dueDate)} · ${formatMoney(payment.amount)}원",
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                    androidx.compose.material3.Switch(
+                                        checked = payment.isPaid,
+                                        onCheckedChange = { checked ->
+                                            onInstallmentPaidToggle(
+                                                payment.copy(
+                                                    isPaid = checked,
+                                                    paidAt = if (checked) System.currentTimeMillis() else null,
+                                                )
+                                            )
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if (isSplit && !selectionMode) {
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 14.dp))
                 AnimatedSplitMembers(
                     expanded = splitExpanded,
@@ -438,6 +565,11 @@ private fun TradeTransactionRow(
             }
         }
     }
+}
+
+private enum class SummaryMode(val label: String) {
+    WithInstallment("할부금 포함 금액"),
+    RawBalance("지금 잔고"),
 }
 
 @Composable
@@ -506,7 +638,10 @@ private fun AnimatedSplitMembers(
 private fun isIncomeType(typeKey: String): Boolean =
     when (TransactionType.fromKey(typeKey)) {
         TransactionType.INCOME, TransactionType.FIXED_INCOME -> true
-        TransactionType.EXPENSE, TransactionType.SPLIT, TransactionType.FIXED_EXPENSE -> false
+        TransactionType.EXPENSE,
+        TransactionType.INSTALLMENT,
+        TransactionType.SPLIT,
+        TransactionType.FIXED_EXPENSE -> false
     }
 
 private fun matchesSearch(row: LedgerRow, query: String): Boolean {

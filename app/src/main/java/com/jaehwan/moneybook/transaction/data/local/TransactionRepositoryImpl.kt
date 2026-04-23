@@ -7,6 +7,7 @@ import com.jaehwan.moneybook.transaction.domain.repository.TransactionRepository
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZonedDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -17,6 +18,7 @@ class TransactionRepositoryImpl @Inject constructor(
 
     private val transactionDao get() = db.transactionDao()
     private val splitMemberDao get() = db.splitMemberDao()
+    private val installmentDao get() = db.installmentDao()
     private val categoryDao get() = db.categoryDao()
 
     override val allTransactions: Flow<List<TransactionEntity>> =
@@ -24,6 +26,12 @@ class TransactionRepositoryImpl @Inject constructor(
 
     override val allSplitMembers: Flow<List<SplitMemberEntity>> =
         splitMemberDao.getAllMembers()
+
+    override val allInstallmentPlans: Flow<List<InstallmentPlanEntity>> =
+        installmentDao.getAllPlans()
+
+    override val allInstallmentPayments: Flow<List<InstallmentPaymentEntity>> =
+        installmentDao.getAllPayments()
 
     override suspend fun insertTransaction(transaction: TransactionEntity): Long =
         transactionDao.insertTransaction(transaction)
@@ -36,6 +44,14 @@ class TransactionRepositoryImpl @Inject constructor(
 
     override suspend fun deleteTransaction(transaction: TransactionEntity) {
         transactionDao.deleteTransaction(transaction)
+    }
+
+    override suspend fun deleteTransactions(transactions: List<TransactionEntity>) {
+        if (transactions.isEmpty()) return
+        // SplitMemberEntity FK는 CASCADE라 거래 삭제 시 멤버 행도 함께 제거됨.
+        db.withTransaction {
+            transactions.forEach { transactionDao.deleteTransaction(it) }
+        }
     }
 
     override suspend fun getSplitMembers(transactionId: Long): List<SplitMemberEntity> =
@@ -87,6 +103,54 @@ class TransactionRepositoryImpl @Inject constructor(
             member.copy(updatedAt = System.currentTimeMillis())
         )
     }
+
+    override suspend fun upsertInstallmentPlan(
+        transactionId: Long,
+        totalAmount: Int,
+        months: Int,
+        startDate: Long,
+    ) {
+        db.withTransaction {
+            val now = System.currentTimeMillis()
+            val existing = installmentDao.getPlanByTransactionId(transactionId)
+            if (existing != null) {
+                installmentDao.deletePaymentsByPlanId(existing.id)
+                installmentDao.deletePlanByTransactionId(transactionId)
+            }
+            val planId = installmentDao.insertPlan(
+                InstallmentPlanEntity(
+                    transactionId = transactionId,
+                    totalAmount = totalAmount,
+                    months = months,
+                    startDate = startDate,
+                    createdAt = now,
+                    updatedAt = now,
+                )
+            )
+            installmentDao.insertPayments(
+                buildInstallmentPayments(
+                    planId = planId,
+                    totalAmount = totalAmount,
+                    months = months,
+                    startDate = startDate,
+                    now = now,
+                )
+            )
+        }
+    }
+
+    override suspend fun clearInstallmentPlan(transactionId: Long) {
+        installmentDao.deletePlanByTransactionId(transactionId)
+    }
+
+    override suspend fun updateInstallmentPayment(payment: InstallmentPaymentEntity) {
+        installmentDao.updatePayment(
+            payment.copy(updatedAt = System.currentTimeMillis())
+        )
+    }
+
+    override suspend fun getInstallmentPaymentsByTransaction(transactionId: Long): List<InstallmentPaymentEntity> =
+        installmentDao.getPaymentsByTransactionId(transactionId)
 
     override suspend fun ensureMarchDemoTransactions() {
         if (transactionDao.countTransactions() > 0) return
@@ -181,6 +245,38 @@ class TransactionRepositoryImpl @Inject constructor(
             if (transactionDao.countTransactions() == 0) {
                 seedTx.forEach { tx -> transactionDao.insertTransaction(tx) }
             }
+        }
+    }
+
+    private fun buildInstallmentPayments(
+        planId: Long,
+        totalAmount: Int,
+        months: Int,
+        startDate: Long,
+        now: Long,
+    ): List<InstallmentPaymentEntity> {
+        val safeMonths = months.coerceAtLeast(1)
+        val amountPerMonth = totalAmount / safeMonths
+        val remainder = totalAmount % safeMonths
+        val zone = ZoneId.systemDefault()
+        val start = ZonedDateTime.ofInstant(
+            java.time.Instant.ofEpochMilli(startDate),
+            zone,
+        )
+        return (1..safeMonths).map { seq ->
+            val plusMonth = start.plusMonths((seq - 1).toLong())
+            val dueDate = plusMonth.toInstant().toEpochMilli()
+            val amount = amountPerMonth + if (seq <= remainder) 1 else 0
+            InstallmentPaymentEntity(
+                planId = planId,
+                sequenceNo = seq,
+                dueDate = dueDate,
+                amount = amount,
+                isPaid = false,
+                paidAt = null,
+                createdAt = now,
+                updatedAt = now,
+            )
         }
     }
 }

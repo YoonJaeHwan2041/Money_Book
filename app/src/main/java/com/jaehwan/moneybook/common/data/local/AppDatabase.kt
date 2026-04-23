@@ -6,6 +6,9 @@ import com.jaehwan.moneybook.category.data.local.CategoryDao
 import com.jaehwan.moneybook.category.data.local.CategoryEntity
 import com.jaehwan.moneybook.splitmember.data.local.SplitMemberDao
 import com.jaehwan.moneybook.splitmember.data.local.SplitMemberEntity
+import com.jaehwan.moneybook.transaction.data.local.InstallmentDao
+import com.jaehwan.moneybook.transaction.data.local.InstallmentPaymentEntity
+import com.jaehwan.moneybook.transaction.data.local.InstallmentPlanEntity
 import com.jaehwan.moneybook.transaction.data.local.TransactionDao
 import com.jaehwan.moneybook.transaction.data.local.TransactionEntity
 
@@ -13,13 +16,16 @@ import com.jaehwan.moneybook.transaction.data.local.TransactionEntity
     entities = [
         CategoryEntity::class,
         TransactionEntity::class,
-        SplitMemberEntity::class
+        SplitMemberEntity::class,
+        InstallmentPlanEntity::class,
+        InstallmentPaymentEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false // 테스트 용도가 아니라면 false로 둡니다.
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun categoryDao(): CategoryDao
     abstract fun transactionDao(): TransactionDao
     abstract fun splitMemberDao(): SplitMemberDao
+    abstract fun installmentDao(): InstallmentDao
 }

@@ -45,6 +45,7 @@ import com.jaehwan.moneybook.splitmember.ui.SplitEditorScreen
 import com.jaehwan.moneybook.transaction.data.local.TransactionEntity
 import com.jaehwan.moneybook.transaction.domain.model.TransactionType
 import com.jaehwan.moneybook.transaction.ui.LedgerScreen
+import com.jaehwan.moneybook.transaction.ui.TradeAllTransactionsScreen
 import com.jaehwan.moneybook.transaction.ui.TradeScreen
 import com.jaehwan.moneybook.transaction.ui.LedgerViewModel
 import com.jaehwan.moneybook.transaction.ui.TransactionDetailScreen
@@ -59,6 +60,7 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
     val ledgerViewModel: LedgerViewModel = hiltViewModel()
     val categories by viewModel.categories.collectAsState()
     val ledgerRows by ledgerViewModel.ledgerRows.collectAsState()
+    val installmentSummary by ledgerViewModel.installmentSummary.collectAsState()
     var showSplash by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
@@ -90,6 +92,7 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
         ledgerRows.firstOrNull { it.transaction.id == selectedId }
     }
     var lastBackPressedAt by remember { mutableStateOf(0L) }
+    var tradeSubRoute by remember { mutableStateOf(TradeSubRoute.Monthly) }
 
     BackHandler {
         when {
@@ -111,6 +114,9 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
             categoryPendingDelete != null -> categoryPendingDelete = null
             workingPopup != null -> workingPopup = null
             settingsSection != SettingsSection.Root -> settingsSection = SettingsSection.Root
+            destination == MainDestination.Trade && tradeSubRoute == TradeSubRoute.All -> {
+                tradeSubRoute = TradeSubRoute.Monthly
+            }
             destination != MainDestination.Home -> destination = MainDestination.Home
             else -> {
                 val now = System.currentTimeMillis()
@@ -142,7 +148,12 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                             when (dest) {
                                 MainDestination.Home,
                                 MainDestination.Settings,
-                                MainDestination.Trade -> destination = dest
+                                MainDestination.Trade -> {
+                                    if (dest == MainDestination.Trade && destination != MainDestination.Trade) {
+                                        tradeSubRoute = TradeSubRoute.Monthly
+                                    }
+                                    destination = dest
+                                }
                                 MainDestination.Report -> workingPopup = dest
                             }
                         },
@@ -176,6 +187,7 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                 MainDestination.Home -> {
                     LedgerScreen(
                         rows = ledgerRows,
+                        installmentSummary = installmentSummary,
                         categoriesEmpty = categories.isEmpty(),
                         onEdit = { tx ->
                             if (TransactionType.fromKey(tx.type) == TransactionType.SPLIT) {
@@ -201,15 +213,36 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                 }
 
                 MainDestination.Trade -> {
-                    TradeScreen(
-                        rows = ledgerRows,
-                        onAddClick = {
-                            transactionBeingEdited = null
-                            showTransactionEntry = true
-                        },
-                        onOpenDetail = { row -> selectedDetailTransactionId = row.transaction.id },
-                        onSplitMemberPaidToggle = { member -> ledgerViewModel.updateSplitMember(member) },
-                    )
+                    when (tradeSubRoute) {
+                        TradeSubRoute.Monthly -> {
+                            TradeScreen(
+                                rows = ledgerRows,
+                                installmentSummary = installmentSummary,
+                                onAddClick = {
+                                    transactionBeingEdited = null
+                                    showTransactionEntry = true
+                                },
+                                onOpenDetail = { row -> selectedDetailTransactionId = row.transaction.id },
+                                onSplitMemberPaidToggle = { member -> ledgerViewModel.updateSplitMember(member) },
+                                onInstallmentPaidToggle = { payment -> ledgerViewModel.updateInstallmentPayment(payment) },
+                                onOpenAllTransactions = { tradeSubRoute = TradeSubRoute.All },
+                            )
+                        }
+                        TradeSubRoute.All -> {
+                            TradeAllTransactionsScreen(
+                                rows = ledgerRows,
+                                onBack = { tradeSubRoute = TradeSubRoute.Monthly },
+                                onAddClick = {
+                                    transactionBeingEdited = null
+                                    showTransactionEntry = true
+                                },
+                                onOpenDetail = { row -> selectedDetailTransactionId = row.transaction.id },
+                                onSplitMemberPaidToggle = { member -> ledgerViewModel.updateSplitMember(member) },
+                                onInstallmentPaidToggle = { payment -> ledgerViewModel.updateInstallmentPayment(payment) },
+                                onDeleteTransactions = { txs -> ledgerViewModel.deleteTransactions(txs) },
+                            )
+                        }
+                    }
                 }
 
                 MainDestination.Settings -> {
@@ -231,6 +264,7 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                             }
                             LedgerScreen(
                                 rows = ledgerRows,
+                                installmentSummary = installmentSummary,
                                 categoriesEmpty = categories.isEmpty(),
                                 onEdit = { tx ->
                                     if (TransactionType.fromKey(tx.type) == TransactionType.SPLIT) {
@@ -294,15 +328,37 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                 TransactionEntryScreen(
                     categories = categories,
                     initial = transactionBeingEdited,
+                    initialInstallmentPlan = transactionBeingEdited?.let { tx ->
+                        ledgerRows.firstOrNull { it.transaction.id == tx.id }?.installmentPlan
+                    },
                     onDismiss = {
                         showTransactionEntry = false
                         transactionBeingEdited = null
                     },
-                    onSaveNormal = { entity ->
+                    onSaveNormal = { entity, installmentInput ->
                         if (entity.id == 0L) {
-                            ledgerViewModel.insertTransaction(entity)
+                            if (installmentInput != null) {
+                                ledgerViewModel.insertTransactionWithInstallment(
+                                    transaction = entity,
+                                    installmentTotalAmount = installmentInput.totalAmount,
+                                    installmentMonths = installmentInput.months,
+                                    installmentStartDate = installmentInput.startDate,
+                                )
+                            } else {
+                                ledgerViewModel.insertTransaction(entity)
+                            }
                         } else {
-                            ledgerViewModel.updateTransaction(entity)
+                            if (installmentInput != null) {
+                                ledgerViewModel.updateTransactionWithInstallment(
+                                    transaction = entity,
+                                    installmentTotalAmount = installmentInput.totalAmount,
+                                    installmentMonths = installmentInput.months,
+                                    installmentStartDate = installmentInput.startDate,
+                                )
+                            } else {
+                                ledgerViewModel.updateTransaction(entity)
+                                ledgerViewModel.clearInstallment(entity.id)
+                            }
                         }
                         showTransactionEntry = false
                         transactionBeingEdited = null
@@ -421,6 +477,7 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                     row = detailRow,
                     onBack = { selectedDetailTransactionId = null },
                     onSplitMemberPaidToggle = { member -> ledgerViewModel.updateSplitMember(member) },
+                    onInstallmentPaidToggle = { payment -> ledgerViewModel.updateInstallmentPayment(payment) },
                 )
             }
         }
@@ -475,4 +532,9 @@ private enum class SettingsSection {
     Root,
     CategoryManager,
     LegacyLedger,
+}
+
+private enum class TradeSubRoute {
+    Monthly,
+    All,
 }

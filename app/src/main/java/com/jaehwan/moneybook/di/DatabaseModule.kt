@@ -37,4 +37,7 @@ object DatabaseModule {
 
     @Provides
     fun provideSplitMemberDao(db: AppDatabase) = db.splitMemberDao()
+
+    @Provides
+    fun provideInstallmentDao(db: AppDatabase) = db.installmentDao()
 }

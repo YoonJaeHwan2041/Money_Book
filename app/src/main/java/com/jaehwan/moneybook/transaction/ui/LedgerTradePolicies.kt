@@ -25,7 +25,7 @@ fun calculateMonthlyTotals(rows: List<LedgerRow>): MonthlyTotals {
     }
     val expense = rows.sumOf { row ->
         when (TransactionType.fromKey(row.transaction.type)) {
-            TransactionType.EXPENSE, TransactionType.SPLIT -> row.transaction.amount
+            TransactionType.EXPENSE, TransactionType.INSTALLMENT, TransactionType.SPLIT -> row.transaction.amount
             TransactionType.FIXED_EXPENSE -> if (row.transaction.isConfirmed) row.transaction.amount else 0
             else -> 0
         }
@@ -39,6 +39,9 @@ fun calculateCurrentBalance(rows: List<LedgerRow>): Int =
         when (TransactionType.fromKey(row.transaction.type)) {
             TransactionType.INCOME -> amount
             TransactionType.EXPENSE, TransactionType.SPLIT -> -amount
+            // 할부는 상단 요약 카드에서 남은 원금을 별도로 차감해 보여주므로
+            // 기본 잔고 계산에서는 즉시 차감하지 않는다(이중 차감 방지).
+            TransactionType.INSTALLMENT -> 0
             TransactionType.FIXED_INCOME -> if (row.transaction.isConfirmed) amount else 0
             TransactionType.FIXED_EXPENSE -> if (row.transaction.isConfirmed) -amount else 0
         }

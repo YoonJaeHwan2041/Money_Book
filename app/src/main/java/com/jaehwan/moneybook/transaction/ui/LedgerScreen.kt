@@ -27,6 +27,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,6 +52,7 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun LedgerScreen(
     rows: List<LedgerRow>,
+    installmentSummary: InstallmentSummary,
     categoriesEmpty: Boolean,
     onEdit: (TransactionEntity) -> Unit,
     onDeleteRequest: (TransactionEntity) -> Unit,
@@ -119,7 +121,7 @@ fun LedgerScreen(
     val categoryExpenses = monthlyRows
         .filter {
             val t = TransactionType.fromKey(it.transaction.type)
-            t == TransactionType.EXPENSE || t == TransactionType.SPLIT ||
+            t == TransactionType.EXPENSE || t == TransactionType.INSTALLMENT || t == TransactionType.SPLIT ||
                 (t == TransactionType.FIXED_EXPENSE && it.transaction.isConfirmed)
         }
         .groupBy { Triple(it.transaction.categoryId, it.categoryName, it.categoryIconKey) }
@@ -163,6 +165,7 @@ fun LedgerScreen(
                 income = monthlyIncome,
                 expense = monthlyExpense,
                 balance = currentBalance,
+                installmentSummary = installmentSummary,
             )
         }
         item {
@@ -260,20 +263,67 @@ private fun MonthlySummaryCard(
     income: Int,
     expense: Int,
     balance: Int,
+    installmentSummary: InstallmentSummary,
 ) {
+    var showInstallment by rememberSaveable { mutableStateOf(true) }
+    var mode by rememberSaveable { mutableStateOf(HomeSummaryMode.WithInstallment) }
+    val adjustedBalance = balance - installmentSummary.remainingTotal
+    val displayBalance = if (mode == HomeSummaryMode.WithInstallment) adjustedBalance else balance
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF11C78B)),
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
-            Text("현재 통장 잔고", color = Color.White, style = MaterialTheme.typography.titleMedium)
+            Text(
+                if (mode == HomeSummaryMode.WithInstallment) "할부금 포함 금액" else "현재 통장 잔고",
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium
+            )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "${formatMoney(balance)}원",
+                text = "${formatMoney(displayBalance)}원",
                 color = Color.White,
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
             )
+            if (showInstallment) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "-${formatMoney(installmentSummary.remainingTotal)}원 · 할부 ${installmentSummary.activeCount}건",
+                    color = Color(0xFFFFD6D6),
+                    style = MaterialTheme.typography.labelLarge,
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    HomeSummaryMode.entries.forEach { item ->
+                        Surface(
+                            shape = CircleShape,
+                            color = if (item == mode) Color.White.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.12f),
+                            modifier = Modifier.clickable { mode = item },
+                        ) {
+                            Text(
+                                text = item.label,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                        }
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("할부 표시", color = Color.White, style = MaterialTheme.typography.labelSmall)
+                    Switch(
+                        checked = showInstallment,
+                        onCheckedChange = { showInstallment = it },
+                    )
+                }
+            }
             Spacer(modifier = Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MiniSummaryCard(
@@ -599,7 +649,7 @@ private fun formatMonthDay(epochMillis: Long): String {
 private fun isIncomeLike(type: TransactionType): Boolean =
     when (type) {
         TransactionType.INCOME, TransactionType.FIXED_INCOME -> true
-        TransactionType.EXPENSE, TransactionType.SPLIT -> false
+        TransactionType.EXPENSE, TransactionType.INSTALLMENT, TransactionType.SPLIT -> false
         TransactionType.FIXED_EXPENSE -> false
     }
 
@@ -617,4 +667,9 @@ private enum class RecentFilter(val label: String) {
     All("전체"),
     Income("수입"),
     Expense("지출"),
+}
+
+private enum class HomeSummaryMode(val label: String) {
+    WithInstallment("할부금 포함 금액"),
+    RawBalance("지금 잔고"),
 }
