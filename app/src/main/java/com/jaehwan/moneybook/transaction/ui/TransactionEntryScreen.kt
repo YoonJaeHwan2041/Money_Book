@@ -85,7 +85,7 @@ fun TransactionEntryScreen(
             } ?: TransactionType.EXPENSE
         )
     }
-    var amountText by remember(initial?.id) { mutableStateOf(initial?.amount?.let { formatAmountInput(it.toString()) }.orEmpty()) }
+    var amountText by remember(initial?.id) { mutableStateOf(initial?.amount?.toString().orEmpty()) }
     var categoryId by remember(initial?.id) { mutableStateOf(initial?.categoryId ?: categories.firstOrNull()?.id ?: 0L) }
     var memoText by remember(initial?.id) { mutableStateOf(initial?.memo.orEmpty()) }
     var isConfirmed by remember(initial?.id) { mutableStateOf(initial?.isConfirmed ?: true) }
@@ -327,7 +327,7 @@ fun TransactionEntryScreen(
             OutlinedTextField(
                 value = amountText,
                 onValueChange = {
-                    amountText = formatAmountInput(it)
+                    amountText = sanitizeAmountInput(it)
                     formError = null
                 },
                 modifier = Modifier
@@ -415,7 +415,7 @@ fun TransactionEntryScreen(
                         OutlinedTextField(
                             value = selfAmountText,
                             onValueChange = {
-                                selfAmountText = formatAmountInput(it)
+                                selfAmountText = sanitizeAmountInput(it)
                                 formError = null
                             },
                             label = { Text("본인 부담금") },
@@ -428,7 +428,7 @@ fun TransactionEntryScreen(
                             OutlinedTextField(
                                 value = bulkAmountText,
                                 onValueChange = {
-                                    bulkAmountText = formatAmountInput(it)
+                                    bulkAmountText = sanitizeAmountInput(it)
                                     formError = null
                                 },
                                 label = { Text("전체 입력 금액(본인 제외)") },
@@ -439,7 +439,7 @@ fun TransactionEntryScreen(
                             )
                             TextButton(
                                 onClick = {
-                                    val bulk = formatAmountInput(bulkAmountText)
+                                    val bulk = sanitizeAmountInput(bulkAmountText)
                                     memberDrafts.forEach { it.amountText = bulk }
                                 },
                                 modifier = Modifier.padding(top = 10.dp),
@@ -469,7 +469,7 @@ fun TransactionEntryScreen(
                             OutlinedTextField(
                                 value = draft.amountText,
                                 onValueChange = {
-                                    draft.amountText = formatAmountInput(it)
+                                    draft.amountText = sanitizeAmountInput(it)
                                     formError = null
                                 },
                                 label = { Text("멤버 ${idx + 1} 금액") },
@@ -547,9 +547,10 @@ private fun CategoryPickerField(
 private fun parseAmountInput(value: String): Int? =
     com.jaehwan.moneybook.transaction.domain.parseMoneyInput(value)
 
-private fun formatAmountInput(value: String): String {
-    return com.jaehwan.moneybook.transaction.domain.formatMoneyInput(value)
-}
+private fun sanitizeAmountInput(value: String): String =
+    value.filter { it.isDigit() }.trimStart('0').ifEmpty {
+        if (value.any { it.isDigit() }) "0" else ""
+    }
 
 private fun formatMoney(amount: Int): String =
     com.jaehwan.moneybook.transaction.domain.formatMoney(amount)

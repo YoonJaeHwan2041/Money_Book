@@ -31,7 +31,8 @@ interface InstallmentDao {
             ip.transaction_id AS transactionId,
             COUNT(p.id) AS totalCount,
             COALESCE(SUM(CASE WHEN p.is_paid = 1 THEN 1 ELSE 0 END), 0) AS paidCount,
-            COALESCE(SUM(CASE WHEN p.is_paid = 0 THEN p.amount ELSE 0 END), 0) AS remainingAmount
+            COALESCE(SUM(CASE WHEN p.is_paid = 0 THEN p.amount ELSE 0 END), 0) AS remainingAmount,
+            COALESCE(SUM(CASE WHEN p.is_paid = 1 THEN p.amount ELSE 0 END), 0) AS paidAmount
         FROM installment_plan ip
         LEFT JOIN installment_payment p ON p.plan_id = ip.id
         GROUP BY ip.id
@@ -48,6 +49,16 @@ interface InstallmentDao {
         """
     )
     suspend fun getPaymentsByTransactionId(transactionId: Long): List<InstallmentPaymentEntity>
+
+    @Query(
+        """
+        SELECT p.* FROM installment_payment p
+        INNER JOIN installment_plan ip ON ip.id = p.plan_id
+        WHERE ip.transaction_id = :transactionId
+        ORDER BY p.sequence_no ASC
+        """
+    )
+    fun observePaymentsByTransactionId(transactionId: Long): Flow<List<InstallmentPaymentEntity>>
 
     @Query("SELECT * FROM installment_plan WHERE transaction_id = :transactionId LIMIT 1")
     suspend fun getPlanByTransactionId(transactionId: Long): InstallmentPlanEntity?

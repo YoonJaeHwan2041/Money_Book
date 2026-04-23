@@ -39,9 +39,8 @@ fun calculateCurrentBalance(rows: List<LedgerRow>): Int =
         when (TransactionType.fromKey(row.transaction.type)) {
             TransactionType.INCOME -> amount
             TransactionType.EXPENSE, TransactionType.SPLIT -> -amount
-            // 할부는 상단 요약 카드에서 남은 원금을 별도로 차감해 보여주므로
-            // 기본 잔고 계산에서는 즉시 차감하지 않는다(이중 차감 방지).
-            TransactionType.INSTALLMENT -> 0
+            // 할부는 납부 완료된 회차 금액만 잔고에 반영한다.
+            TransactionType.INSTALLMENT -> -row.installmentPaidAmount
             TransactionType.FIXED_INCOME -> if (row.transaction.isConfirmed) amount else 0
             TransactionType.FIXED_EXPENSE -> if (row.transaction.isConfirmed) -amount else 0
         }

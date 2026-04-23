@@ -155,6 +155,9 @@ class TransactionRepositoryImpl @Inject constructor(
     override suspend fun getInstallmentPaymentsByTransaction(transactionId: Long): List<InstallmentPaymentEntity> =
         installmentDao.getPaymentsByTransactionId(transactionId)
 
+    override fun observeInstallmentPaymentsByTransaction(transactionId: Long): Flow<List<InstallmentPaymentEntity>> =
+        installmentDao.observePaymentsByTransactionId(transactionId)
+
     override suspend fun ensureMarchDemoTransactions() {
         if (transactionDao.countTransactions() > 0) return
 

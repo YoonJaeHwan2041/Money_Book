@@ -11,6 +11,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -50,6 +51,7 @@ class LedgerViewModel @Inject constructor(
                 installmentTotalCount = status?.totalCount ?: 0,
                 installmentPaidCount = status?.paidCount ?: 0,
                 installmentRemainingAmount = status?.remainingAmount ?: 0,
+                installmentPaidAmount = status?.paidAmount ?: 0,
             )
         }
     }.stateIn(
@@ -165,4 +167,7 @@ class LedgerViewModel @Inject constructor(
 
     suspend fun getInstallmentPayments(transactionId: Long): List<InstallmentPaymentEntity> =
         transactionRepository.getInstallmentPaymentsByTransaction(transactionId)
+
+    fun observeInstallmentPayments(transactionId: Long): Flow<List<InstallmentPaymentEntity>> =
+        transactionRepository.observeInstallmentPaymentsByTransaction(transactionId)
 }

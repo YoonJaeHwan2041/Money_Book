@@ -5,4 +5,5 @@ data class InstallmentPlanStatusSnapshot(
     val totalCount: Int,
     val paidCount: Int,
     val remainingAmount: Int,
+    val paidAmount: Int,
 )

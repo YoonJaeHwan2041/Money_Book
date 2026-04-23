@@ -20,8 +20,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,6 +31,7 @@ import com.jaehwan.moneybook.transaction.data.local.InstallmentPaymentEntity
 import com.jaehwan.moneybook.transaction.data.local.TransactionEntity
 import com.jaehwan.moneybook.splitmember.data.local.SplitMemberEntity
 import com.jaehwan.moneybook.transaction.domain.model.TransactionType
+import kotlinx.coroutines.flow.Flow
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -44,15 +45,13 @@ fun TransactionDetailScreen(
     onDeleteRequest: (TransactionEntity) -> Unit,
     onSplitMemberPaidToggle: (SplitMemberEntity) -> Unit,
     onInstallmentPaidToggle: (InstallmentPaymentEntity) -> Unit,
-    loadInstallmentPayments: suspend (Long) -> List<InstallmentPaymentEntity>,
+    observeInstallmentPayments: (Long) -> Flow<List<InstallmentPaymentEntity>>,
 ) {
     val tx = row.transaction
     val type = TransactionType.fromKey(tx.type)
     val splitMembers = row.splitMembers
     val installmentPlan = row.installmentPlan
-    val installmentPayments by produceState(initialValue = emptyList<InstallmentPaymentEntity>(), key1 = tx.id, key2 = installmentPlan?.id) {
-        value = if (installmentPlan == null) emptyList() else loadInstallmentPayments(tx.id)
-    }
+    val installmentPayments by observeInstallmentPayments(tx.id).collectAsState(initial = emptyList())
     val isSplit = type == TransactionType.SPLIT
     val incomeLike = type == TransactionType.INCOME || type == TransactionType.FIXED_INCOME
     val unpaidTotal = splitMembers

@@ -13,4 +13,5 @@ data class LedgerRow(
     val installmentTotalCount: Int = 0,
     val installmentPaidCount: Int = 0,
     val installmentRemainingAmount: Int = 0,
+    val installmentPaidAmount: Int = 0,
 )

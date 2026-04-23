@@ -44,6 +44,7 @@ interface TransactionRepository {
     suspend fun updateInstallmentPayment(payment: InstallmentPaymentEntity)
 
     suspend fun getInstallmentPaymentsByTransaction(transactionId: Long): List<InstallmentPaymentEntity>
+    fun observeInstallmentPaymentsByTransaction(transactionId: Long): Flow<List<InstallmentPaymentEntity>>
 
     suspend fun ensureMarchDemoTransactions()
 }
