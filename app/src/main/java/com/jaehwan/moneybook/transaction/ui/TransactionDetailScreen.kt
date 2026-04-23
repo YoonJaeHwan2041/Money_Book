@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.jaehwan.moneybook.transaction.data.local.InstallmentPaymentEntity
+import com.jaehwan.moneybook.transaction.data.local.TransactionEntity
 import com.jaehwan.moneybook.splitmember.data.local.SplitMemberEntity
 import com.jaehwan.moneybook.transaction.domain.model.TransactionType
 import java.time.Instant
@@ -37,6 +38,8 @@ import java.time.format.DateTimeFormatter
 fun TransactionDetailScreen(
     row: LedgerRow,
     onBack: () -> Unit,
+    onEdit: (TransactionEntity) -> Unit,
+    onDeleteRequest: (TransactionEntity) -> Unit,
     onSplitMemberPaidToggle: (SplitMemberEntity) -> Unit,
     onInstallmentPaidToggle: (InstallmentPaymentEntity) -> Unit,
 ) {
@@ -57,6 +60,14 @@ fun TransactionDetailScreen(
                 navigationIcon = {
                     TextButton(onClick = onBack) {
                         Text("뒤로")
+                    }
+                },
+                actions = {
+                    TextButton(onClick = { onEdit(row.transaction) }) {
+                        Text("수정")
+                    }
+                    TextButton(onClick = { onDeleteRequest(row.transaction) }) {
+                        Text("삭제")
                     }
                 }
             )

@@ -476,6 +476,21 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                 TransactionDetailScreen(
                     row = detailRow,
                     onBack = { selectedDetailTransactionId = null },
+                    onEdit = { tx ->
+                        selectedDetailTransactionId = null
+                        if (TransactionType.fromKey(tx.type) == TransactionType.SPLIT) {
+                            splitEditorTransaction = tx
+                            splitPrefill = null
+                            showSplitEditor = true
+                        } else {
+                            transactionBeingEdited = tx
+                            showTransactionEntry = true
+                        }
+                    },
+                    onDeleteRequest = { tx ->
+                        selectedDetailTransactionId = null
+                        transactionPendingDelete = tx
+                    },
                     onSplitMemberPaidToggle = { member -> ledgerViewModel.updateSplitMember(member) },
                     onInstallmentPaidToggle = { payment -> ledgerViewModel.updateInstallmentPayment(payment) },
                 )
