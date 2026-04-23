@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +18,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -24,10 +27,12 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,6 +54,7 @@ import java.time.ZoneId
 @Composable
 fun TradeAllTransactionsScreen(
     rows: List<LedgerRow>,
+    installmentSummary: InstallmentSummary,
     onBack: () -> Unit,
     onAddClick: () -> Unit,
     onOpenDetail: (LedgerRow) -> Unit,
@@ -64,6 +70,9 @@ fun TradeAllTransactionsScreen(
     var selectedIds by rememberSaveable { mutableStateOf(setOf<Long>()) }
 
     val availableCategories = rows.map { it.categoryName }.distinct().sorted()
+    val globalBalance by remember(rows) {
+        derivedStateOf { calculateCurrentBalance(rows) }
+    }
     val filteredRows = rows
         .filter { row -> selectedCategory == null || row.categoryName == selectedCategory }
         .filter { row ->
@@ -71,6 +80,7 @@ fun TradeAllTransactionsScreen(
                 AllTradeTypeTab.All -> true
                 AllTradeTypeTab.Income -> isIncomeTypeKey(row.transaction.type)
                 AllTradeTypeTab.Expense -> !isIncomeTypeKey(row.transaction.type)
+                AllTradeTypeTab.Installment -> TransactionType.fromKey(row.transaction.type) == TransactionType.INSTALLMENT
             }
         }
         .filter { row -> matchesSearchAll(row, query) }
@@ -165,6 +175,12 @@ fun TradeAllTransactionsScreen(
                         }
                     }
                 }
+            }
+            item {
+                AllTradeSummaryCard(
+                    balance = globalBalance,
+                    installmentSummary = installmentSummary,
+                )
             }
             item {
                 OutlinedTextField(
@@ -296,10 +312,94 @@ fun TradeAllTransactionsScreen(
     }
 }
 
+@Composable
+private fun AllTradeSummaryCard(
+    balance: Int,
+    installmentSummary: InstallmentSummary,
+) {
+    var showInstallment by rememberSaveable { mutableStateOf(true) }
+    var showMode by rememberSaveable { mutableStateOf(AllSummaryMode.WithInstallment) }
+    val adjustedBalance = balance - installmentSummary.remainingTotal
+    val mainBalance = if (showMode == AllSummaryMode.WithInstallment) adjustedBalance else balance
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF11C78B)),
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Text(
+                text = if (showMode == AllSummaryMode.WithInstallment) "할부금 포함 금액" else "지금 잔고",
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(4.dp))
+            Text(
+                text = "${if (mainBalance >= 0) "+" else "-"}${com.jaehwan.moneybook.transaction.domain.formatMoney(kotlin.math.abs(mainBalance))}원",
+                style = MaterialTheme.typography.headlineLarge,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+            )
+            if (showInstallment) {
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(2.dp))
+                Text(
+                    text = "-${com.jaehwan.moneybook.transaction.domain.formatMoney(installmentSummary.remainingTotal)}원 · 할부 ${installmentSummary.activeCount}건",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color(0xFFFFD6D6),
+                )
+            }
+            androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AllSummaryMode.entries.forEach { mode ->
+                        AllModeChip(
+                            label = mode.label,
+                            selected = showMode == mode,
+                            onClick = { showMode = mode },
+                        )
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("할부 표시", color = Color.White, style = MaterialTheme.typography.labelSmall)
+                    Switch(checked = showInstallment, onCheckedChange = { showInstallment = it })
+                }
+            }
+        }
+    }
+}
+
 private enum class AllTradeTypeTab(val label: String) {
     All("전체"),
     Income("수입"),
     Expense("지출"),
+    Installment("할부"),
+}
+
+private enum class AllSummaryMode(val label: String) {
+    WithInstallment("할부금 포함 금액"),
+    RawBalance("지금 잔고"),
+}
+
+@Composable
+private fun AllModeChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = if (selected) Color.White else Color.White.copy(alpha = 0.18f),
+        modifier = Modifier.clickable(onClick = onClick),
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected) Color(0xFF0AA870) else Color.White,
+        )
+    }
 }
 
 @Composable

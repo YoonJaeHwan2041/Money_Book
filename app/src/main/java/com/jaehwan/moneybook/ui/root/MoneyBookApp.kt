@@ -231,6 +231,7 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                         TradeSubRoute.All -> {
                             TradeAllTransactionsScreen(
                                 rows = ledgerRows,
+                                installmentSummary = installmentSummary,
                                 onBack = { tradeSubRoute = TradeSubRoute.Monthly },
                                 onAddClick = {
                                     transactionBeingEdited = null

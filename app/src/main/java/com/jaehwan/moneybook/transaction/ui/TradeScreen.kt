@@ -45,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.jaehwan.moneybook.category.ui.CategoryIconDisplay
 import com.jaehwan.moneybook.transaction.data.local.InstallmentPaymentEntity
@@ -105,6 +106,7 @@ fun TradeScreen(
                         TradeTypeTab.All -> true
                         TradeTypeTab.Income -> isIncomeType(row.transaction.type)
                         TradeTypeTab.Expense -> !isIncomeType(row.transaction.type)
+                        TradeTypeTab.Installment -> TransactionType.fromKey(row.transaction.type) == TransactionType.INSTALLMENT
                     }
                 }
                 .filter { row -> matchesSearch(row, query) }
@@ -113,14 +115,21 @@ fun TradeScreen(
         }
     }
 
-    val totalIncome by remember(filteredRows) {
+    val totalIncome by remember(rowsByMonth) {
         derivedStateOf {
-            filteredRows.filter { isIncomeType(it.transaction.type) }.sumOf { it.transaction.amount }
+            rowsByMonth.filter { isIncomeType(it.transaction.type) }.sumOf { it.transaction.amount }
         }
     }
-    val totalExpense by remember(filteredRows) {
+    val totalExpense by remember(rowsByMonth) {
         derivedStateOf {
-            filteredRows.filter { !isIncomeType(it.transaction.type) }.sumOf { it.transaction.amount }
+            rowsByMonth.filter { !isIncomeType(it.transaction.type) }.sumOf { it.transaction.amount }
+        }
+    }
+    val totalInstallment by remember(rowsByMonth) {
+        derivedStateOf {
+            rowsByMonth
+                .filter { TransactionType.fromKey(it.transaction.type) == TransactionType.INSTALLMENT }
+                .sumOf { it.transaction.amount }
         }
     }
     val globalBalance = calculateCurrentBalance(rows)
@@ -181,6 +190,7 @@ fun TradeScreen(
                 balance = globalBalance,
                 income = totalIncome,
                 expense = totalExpense,
+                installment = totalInstallment,
                 installmentSummary = installmentSummary,
             )
         }
@@ -314,6 +324,7 @@ private fun TradeSummaryCard(
     balance: Int,
     income: Int,
     expense: Int,
+    installment: Int,
     installmentSummary: InstallmentSummary,
 ) {
     var showInstallment by rememberSaveable { mutableStateOf(true) }
@@ -353,7 +364,7 @@ private fun TradeSummaryCard(
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SummaryMode.entries.forEach { mode ->
-                        FilterChip(
+                        TradeSummaryModeChip(
                             label = mode.label,
                             selected = showMode == mode,
                             onClick = { showMode = mode },
@@ -369,17 +380,24 @@ private fun TradeSummaryCard(
                 }
             }
             Spacer(modifier = Modifier.size(12.dp))
+            TradeSummaryMiniCard(
+                modifier = Modifier.fillMaxWidth(),
+                title = "총 수입",
+                amount = income,
+                positive = true,
+            )
+            Spacer(modifier = Modifier.size(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TradeSummaryMiniCard(
-                    modifier = Modifier.weight(1f),
-                    title = "총 수입",
-                    amount = income,
-                    positive = true,
-                )
                 TradeSummaryMiniCard(
                     modifier = Modifier.weight(1f),
                     title = "총 지출",
                     amount = expense,
+                    positive = false,
+                )
+                TradeSummaryMiniCard(
+                    modifier = Modifier.weight(1f),
+                    title = "총 할부",
+                    amount = installment,
                     positive = false,
                 )
             }
@@ -410,6 +428,8 @@ private fun TradeSummaryMiniCard(
                 color = if (positive) Color(0xFFD6FFED) else Color(0xFFFFE0E0),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -484,28 +504,42 @@ internal fun TradeTransactionRow(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     CategoryIconDisplay(iconKey = row.categoryIconKey, modifier = Modifier.size(34.dp))
                     Spacer(modifier = Modifier.width(10.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = tx.memo?.takeIf { it.isNotBlank() } ?: row.categoryName,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                         Text(
                             text = "${row.categoryName} · ${formatDate(tx.expectedDate)}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier
+                        .padding(start = 12.dp)
+                        .width(126.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.End,
+                ) {
                     Text(
                         text = "${if (income) "+" else "-"}${formatMoney(tx.amount)}원",
                         style = MaterialTheme.typography.titleMedium,
                         color = if (income) Color(0xFF00B874) else Color(0xFFFF6363),
                         fontWeight = FontWeight.Bold,
+                        maxLines = 1,
                     )
                     if (isSplit && !selectionMode) {
                         Icon(
@@ -548,6 +582,26 @@ internal fun TradeTransactionRow(
 private enum class SummaryMode(val label: String) {
     WithInstallment("할부금 포함 금액"),
     RawBalance("지금 잔고"),
+}
+
+@Composable
+private fun TradeSummaryModeChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = if (selected) Color.White else Color.White.copy(alpha = 0.18f),
+        modifier = Modifier.clickable(onClick = onClick),
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected) Color(0xFF0AA870) else Color.White,
+        )
+    }
 }
 
 @Composable
@@ -652,6 +706,7 @@ private enum class TradeTypeTab(val label: String) {
     All("전체"),
     Income("수입"),
     Expense("지출"),
+    Installment("할부"),
 }
 
 private fun isSplitComplete(members: List<SplitMemberEntity>): Boolean {

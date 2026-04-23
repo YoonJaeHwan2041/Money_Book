@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -122,6 +123,13 @@ fun LedgerScreen(
     }
     val monthlyIncome = monthlyTotals.income
     val monthlyExpense = monthlyTotals.expense
+    val monthlyInstallment by remember(monthlyRows) {
+        derivedStateOf {
+            monthlyRows
+                .filter { TransactionType.fromKey(it.transaction.type) == TransactionType.INSTALLMENT }
+                .sumOf { it.transaction.amount }
+        }
+    }
     val currentBalance = calculateCurrentBalance(rows)
     val categoryExpenses by remember(monthlyRows) {
         derivedStateOf {
@@ -154,6 +162,7 @@ fun LedgerScreen(
                         RecentFilter.All -> true
                         RecentFilter.Income -> isIncomeLike(TransactionType.fromKey(it.transaction.type))
                         RecentFilter.Expense -> !isIncomeLike(TransactionType.fromKey(it.transaction.type))
+                        RecentFilter.Installment -> TransactionType.fromKey(it.transaction.type) == TransactionType.INSTALLMENT
                     }
                 }
                 .sortedByDescending { it.transaction.expectedDate }
@@ -180,6 +189,7 @@ fun LedgerScreen(
             MonthlySummaryCard(
                 income = monthlyIncome,
                 expense = monthlyExpense,
+                installment = monthlyInstallment,
                 balance = currentBalance,
                 installmentSummary = installmentSummary,
             )
@@ -278,6 +288,7 @@ private fun HomeHeader() {
 private fun MonthlySummaryCard(
     income: Int,
     expense: Int,
+    installment: Int,
     balance: Int,
     installmentSummary: InstallmentSummary,
 ) {
@@ -318,18 +329,11 @@ private fun MonthlySummaryCard(
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     HomeSummaryMode.entries.forEach { item ->
-                        Surface(
-                            shape = CircleShape,
-                            color = if (item == mode) Color.White.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.12f),
-                            modifier = Modifier.clickable { mode = item },
-                        ) {
-                            Text(
-                                text = item.label,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                color = Color.White,
-                                style = MaterialTheme.typography.labelMedium,
-                            )
-                        }
+                        HomeSummaryModeChip(
+                            label = item.label,
+                            selected = item == mode,
+                            onClick = { mode = item },
+                        )
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -341,16 +345,23 @@ private fun MonthlySummaryCard(
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
+            MiniSummaryCard(
+                title = "총 수입",
+                amount = income,
+                positive = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(modifier = Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MiniSummaryCard(
-                    title = "총 수입",
-                    amount = income,
-                    positive = true,
-                    modifier = Modifier.weight(1f),
-                )
                 MiniSummaryCard(
                     title = "총 지출",
                     amount = expense,
+                    positive = false,
+                    modifier = Modifier.weight(1f),
+                )
+                MiniSummaryCard(
+                    title = "총 할부",
+                    amount = installment,
                     positive = false,
                     modifier = Modifier.weight(1f),
                 )
@@ -683,9 +694,30 @@ private enum class RecentFilter(val label: String) {
     All("전체"),
     Income("수입"),
     Expense("지출"),
+    Installment("할부"),
 }
 
 private enum class HomeSummaryMode(val label: String) {
     WithInstallment("할부금 포함 금액"),
     RawBalance("지금 잔고"),
+}
+
+@Composable
+private fun HomeSummaryModeChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = if (selected) Color.White else Color.White.copy(alpha = 0.18f),
+        modifier = Modifier.clickable(onClick = onClick),
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected) Color(0xFF0AA870) else Color.White,
+        )
+    }
 }
