@@ -22,12 +22,6 @@ class LedgerViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
     private val categoryRepository: CategoryRepository,
 ) : ViewModel() {
-    init {
-        viewModelScope.launch {
-            transactionRepository.ensureMarchDemoTransactions()
-        }
-    }
-
     val ledgerRows: StateFlow<List<LedgerRow>> = combine(
         transactionRepository.allTransactions,
         categoryRepository.allCategories,

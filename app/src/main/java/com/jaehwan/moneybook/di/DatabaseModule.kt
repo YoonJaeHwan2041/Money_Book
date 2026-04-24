@@ -2,8 +2,6 @@ package com.jaehwan.moneybook.di
 
 import android.content.Context
 import androidx.room.Room
-import androidx.room.Database
-import androidx.room.RoomDatabase
 import com.jaehwan.moneybook.common.data.local.AppDatabase
 import dagger.Module
 import dagger.Provides
@@ -25,7 +23,7 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             "moneybook_db" // DB 파일 이름
-        ).fallbackToDestructiveMigration() // 스키마 변경 시 기존 데이터 삭제 후 재생성 (개발 초기 단계에 유용)
+        ).addMigrations(AppDatabase.MIGRATION_4_5)
             .build()
     }
 
@@ -40,4 +38,7 @@ object DatabaseModule {
 
     @Provides
     fun provideInstallmentDao(db: AppDatabase) = db.installmentDao()
+
+    @Provides
+    fun provideFixedScheduleDao(db: AppDatabase) = db.fixedScheduleDao()
 }

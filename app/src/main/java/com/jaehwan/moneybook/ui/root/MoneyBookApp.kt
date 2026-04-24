@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
@@ -41,6 +42,8 @@ import com.jaehwan.moneybook.category.data.local.CategoryEntity
 import com.jaehwan.moneybook.category.ui.CategoryFormDialog
 import com.jaehwan.moneybook.category.ui.CategoryList
 import com.jaehwan.moneybook.category.ui.CategoryViewModel
+import com.jaehwan.moneybook.fixed.ui.FixedManagementScreen
+import com.jaehwan.moneybook.fixed.ui.FixedViewModel
 import com.jaehwan.moneybook.splitmember.ui.SplitEditorScreen
 import com.jaehwan.moneybook.transaction.data.local.TransactionEntity
 import com.jaehwan.moneybook.transaction.domain.model.TransactionType
@@ -52,15 +55,20 @@ import com.jaehwan.moneybook.transaction.ui.TransactionDetailScreen
 import com.jaehwan.moneybook.transaction.ui.LedgerRow
 import com.jaehwan.moneybook.transaction.ui.TransactionEntryScreen
 import kotlinx.coroutines.delay
+import java.time.YearMonth
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
     val context = LocalContext.current
     val ledgerViewModel: LedgerViewModel = hiltViewModel()
+    val fixedViewModel: FixedViewModel = hiltViewModel()
     val categories by viewModel.categories.collectAsState()
     val ledgerRows by ledgerViewModel.ledgerRows.collectAsState()
     val installmentSummary by ledgerViewModel.installmentSummary.collectAsState()
+    val fixedScheduleRows by fixedViewModel.schedules.collectAsState()
     var showSplash by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
@@ -93,6 +101,30 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
     }
     var lastBackPressedAt by remember { mutableStateOf(0L) }
     var tradeSubRoute by remember { mutableStateOf(TradeSubRoute.Monthly) }
+    val nowYearMonth = remember {
+        YearMonth.now(ZoneId.of("Asia/Seoul")).format(DateTimeFormatter.ofPattern("yyyy-MM"))
+    }
+    val monthStart = remember {
+        YearMonth.now(ZoneId.of("Asia/Seoul"))
+            .atDay(1)
+            .atStartOfDay(ZoneId.of("Asia/Seoul"))
+            .toInstant()
+            .toEpochMilli()
+    }
+    val monthEnd = remember {
+        YearMonth.now(ZoneId.of("Asia/Seoul"))
+            .atEndOfMonth()
+            .atTime(23, 59, 59)
+            .atZone(ZoneId.of("Asia/Seoul"))
+            .toInstant()
+            .toEpochMilli()
+    }
+    val monthlyExpectedFixedExpense by fixedViewModel.observeMonthlyExpectedExpense(nowYearMonth).collectAsState(0)
+    val monthlySpentFixedExpense by fixedViewModel.observeMonthlySpentExpense(monthStart, monthEnd).collectAsState(0)
+
+    LaunchedEffect(Unit) {
+        fixedViewModel.syncDueSchedules()
+    }
 
     BackHandler {
         when {
@@ -137,6 +169,7 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                 listOf(
                     MainDestination.Home to ("홈" to Icons.Default.Home),
                     MainDestination.Trade to ("거래" to Icons.Default.Menu),
+                    MainDestination.FixedManagement to ("고정관리" to Icons.Default.DateRange),
                     MainDestination.Report to ("리포트" to Icons.Default.Add),
                     MainDestination.Settings to ("설정" to Icons.Default.Settings),
                 ).forEach { (dest, meta) ->
@@ -148,7 +181,8 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                             when (dest) {
                                 MainDestination.Home,
                                 MainDestination.Settings,
-                                MainDestination.Trade -> {
+                                MainDestination.Trade,
+                                MainDestination.FixedManagement -> {
                                     if (dest == MainDestination.Trade && destination != MainDestination.Trade) {
                                         tradeSubRoute = TradeSubRoute.Monthly
                                     }
@@ -295,6 +329,27 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                             onOpenLegacyTrade = { settingsSection = SettingsSection.LegacyLedger },
                         )
                     }
+                }
+                MainDestination.FixedManagement -> {
+                    FixedManagementScreen(
+                        rows = fixedScheduleRows,
+                        categories = categories,
+                        monthExpectedExpense = monthlyExpectedFixedExpense,
+                        monthSpentExpense = monthlySpentFixedExpense,
+                        onAdd = { kind, categoryId, amount, memo, dayOfMonth, triggerHour, startYearMonth ->
+                            fixedViewModel.insertSchedule(
+                                kind = kind,
+                                categoryId = categoryId,
+                                amount = amount,
+                                memo = memo,
+                                dayOfMonth = dayOfMonth,
+                                triggerHour = triggerHour,
+                                startYearMonth = startYearMonth,
+                            )
+                        },
+                        onUpdate = { schedule -> fixedViewModel.updateSchedule(schedule) },
+                        onDelete = { schedule -> fixedViewModel.deleteSchedule(schedule) },
+                    )
                 }
                 MainDestination.Report -> Unit
             }

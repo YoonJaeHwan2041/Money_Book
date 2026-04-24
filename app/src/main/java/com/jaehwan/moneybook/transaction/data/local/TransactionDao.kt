@@ -20,6 +20,33 @@ interface TransactionDao {
     @Query("SELECT COUNT(*) FROM `transaction`")
     suspend fun countTransactions(): Int
 
+    @Query(
+        """
+        SELECT COUNT(*) FROM `transaction`
+        WHERE type = :type
+          AND category_id = :categoryId
+          AND amount = :amount
+          AND expected_date = :expectedDate
+          AND memo IS :memo
+        """
+    )
+    suspend fun countExactTransaction(
+        type: String,
+        categoryId: Long,
+        amount: Int,
+        expectedDate: Long,
+        memo: String?,
+    ): Int
+
+    @Query(
+        """
+        SELECT COALESCE(SUM(amount), 0) FROM `transaction`
+        WHERE type = 'FIXED_EXPENSE'
+          AND expected_date BETWEEN :startInclusive AND :endInclusive
+        """
+    )
+    fun observeMonthlyFixedExpenseSpent(startInclusive: Long, endInclusive: Long): Flow<Int>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransaction(transaction: TransactionEntity): Long
 
