@@ -47,6 +47,8 @@ import com.jaehwan.moneybook.category.ui.CategoryViewModel
 import com.jaehwan.moneybook.backup.ui.BackupViewModel
 import com.jaehwan.moneybook.fixed.ui.FixedManagementScreen
 import com.jaehwan.moneybook.fixed.ui.FixedViewModel
+import com.jaehwan.moneybook.report.ui.ReportScreen
+import com.jaehwan.moneybook.report.ui.ReportViewModel
 import com.jaehwan.moneybook.splitmember.ui.SplitEditorScreen
 import com.jaehwan.moneybook.transaction.data.local.TransactionEntity
 import com.jaehwan.moneybook.transaction.domain.model.TransactionType
@@ -69,10 +71,17 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
     val ledgerViewModel: LedgerViewModel = hiltViewModel()
     val fixedViewModel: FixedViewModel = hiltViewModel()
     val backupViewModel: BackupViewModel = hiltViewModel()
+    val reportViewModel: ReportViewModel = hiltViewModel()
     val categories by viewModel.categories.collectAsState()
     val ledgerRows by ledgerViewModel.ledgerRows.collectAsState()
     val installmentSummary by ledgerViewModel.installmentSummary.collectAsState()
     val fixedScheduleRows by fixedViewModel.schedules.collectAsState()
+    val reportSelectedMonth by reportViewModel.selectedMonth.collectAsState()
+    val reportForecast by reportViewModel.forecast.collectAsState()
+    val reportCategorySpending by reportViewModel.categorySpending.collectAsState()
+    val reportTopTransaction by reportViewModel.topTransaction.collectAsState()
+    val reportMonthCompare by reportViewModel.monthCompare.collectAsState()
+    val reportCategoryCompare by reportViewModel.categoryCompare.collectAsState()
     var showSplash by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
@@ -214,7 +223,7 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                                     }
                                     destination = dest
                                 }
-                                MainDestination.Report -> workingPopup = dest
+                                MainDestination.Report -> destination = MainDestination.Report
                             }
                         },
                         icon = { Icon(icon, contentDescription = label) },
@@ -262,6 +271,12 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                         onDeleteRequest = { tx ->
                             transactionPendingDelete = tx
                         },
+                        onConfirmPendingFixed = { row ->
+                            ledgerViewModel.confirmFixedTransaction(row.transaction.id)
+                        },
+                        onDiscardPendingFixed = { row ->
+                            ledgerViewModel.discardPendingFixedTransaction(row.transaction.id)
+                        },
                         onSplitMemberPaidToggle = { member ->
                             ledgerViewModel.updateSplitMember(member)
                         },
@@ -283,6 +298,12 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                                     showTransactionEntry = true
                                 },
                                 onOpenDetail = { row -> selectedDetailTransactionId = row.transaction.id },
+                                onConfirmPendingFixed = { row ->
+                                    ledgerViewModel.confirmFixedTransaction(row.transaction.id)
+                                },
+                                onDiscardPendingFixed = { row ->
+                                    ledgerViewModel.discardPendingFixedTransaction(row.transaction.id)
+                                },
                                 onSplitMemberPaidToggle = { member -> ledgerViewModel.updateSplitMember(member) },
                                 onInstallmentPaidToggle = { payment -> ledgerViewModel.updateInstallmentPayment(payment) },
                                 onOpenAllTransactions = { tradeSubRoute = TradeSubRoute.All },
@@ -340,6 +361,12 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                                 onDeleteRequest = { tx ->
                                     transactionPendingDelete = tx
                                 },
+                                onConfirmPendingFixed = { row ->
+                                    ledgerViewModel.confirmFixedTransaction(row.transaction.id)
+                                },
+                                onDiscardPendingFixed = { row ->
+                                    ledgerViewModel.discardPendingFixedTransaction(row.transaction.id)
+                                },
                                 onSplitMemberPaidToggle = { member ->
                                     ledgerViewModel.updateSplitMember(member)
                                 },
@@ -384,7 +411,17 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                         onDelete = { schedule -> fixedViewModel.deleteSchedule(schedule) },
                     )
                 }
-                MainDestination.Report -> Unit
+                MainDestination.Report -> {
+                    ReportScreen(
+                        selectedMonth = reportSelectedMonth,
+                        forecast = reportForecast,
+                        categorySpending = reportCategorySpending,
+                        topTransaction = reportTopTransaction,
+                        monthCompare = reportMonthCompare,
+                        categoryCompare = reportCategoryCompare,
+                        onChangeMonth = { reportViewModel.changeMonth(it) },
+                    )
+                }
             }
 
             if (showCategoryForm) {

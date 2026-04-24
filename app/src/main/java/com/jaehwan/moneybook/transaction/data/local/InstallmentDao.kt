@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import com.jaehwan.moneybook.report.data.local.InstallmentCategoryPaidRow
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -92,4 +93,52 @@ interface InstallmentDao {
 
     @Query("DELETE FROM installment_plan")
     suspend fun deleteAllPlans()
+
+    @Query(
+        """
+        SELECT COALESCE(SUM(amount), 0) FROM installment_payment
+        WHERE is_paid = 0
+          AND due_date BETWEEN :startInclusive AND :endInclusive
+        """
+    )
+    fun observeExpectedInstallmentDue(startInclusive: Long, endInclusive: Long): Flow<Int>
+
+    @Query(
+        """
+        SELECT COALESCE(SUM(amount), 0) FROM installment_payment
+        WHERE is_paid = 1
+        """
+    )
+    fun observeTotalPaidInstallmentAmount(): Flow<Int>
+
+    @Query(
+        """
+        SELECT COALESCE(SUM(amount), 0) FROM installment_payment
+        WHERE is_paid = 1
+          AND paid_at BETWEEN :startInclusive AND :endInclusive
+        """
+    )
+    fun observeMonthlyPaidInstallmentTotal(startInclusive: Long, endInclusive: Long): Flow<Int>
+
+    @Query(
+        """
+        SELECT
+            t.category_id AS categoryId,
+            c.name AS categoryName,
+            c.icon_key AS categoryIconKey,
+            COALESCE(SUM(p.amount), 0) AS amount
+        FROM installment_payment p
+        INNER JOIN installment_plan ip ON ip.id = p.plan_id
+        INNER JOIN `transaction` t ON t.id = ip.transaction_id
+        INNER JOIN category c ON c.id = t.category_id
+        WHERE p.is_paid = 1
+          AND p.paid_at BETWEEN :startInclusive AND :endInclusive
+        GROUP BY t.category_id
+        ORDER BY amount DESC
+        """
+    )
+    fun observeMonthlyPaidInstallmentByCategory(
+        startInclusive: Long,
+        endInclusive: Long,
+    ): Flow<List<InstallmentCategoryPaidRow>>
 }

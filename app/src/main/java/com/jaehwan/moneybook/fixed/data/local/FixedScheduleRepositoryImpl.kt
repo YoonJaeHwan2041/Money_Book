@@ -79,7 +79,7 @@ class FixedScheduleRepositoryImpl @Inject constructor(
                                 categoryId = mutableSchedule.categoryId,
                                 amount = mutableSchedule.amount,
                                 type = mutableSchedule.kind,
-                                isConfirmed = true,
+                                isConfirmed = false,
                                 expectedDate = dueEpoch,
                                 hasAlarm = false,
                                 memo = mutableSchedule.memo,

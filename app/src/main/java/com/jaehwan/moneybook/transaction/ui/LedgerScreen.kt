@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -58,6 +59,8 @@ fun LedgerScreen(
     categoriesEmpty: Boolean,
     onEdit: (TransactionEntity) -> Unit,
     onDeleteRequest: (TransactionEntity) -> Unit,
+    onConfirmPendingFixed: (LedgerRow) -> Unit = {},
+    onDiscardPendingFixed: (LedgerRow) -> Unit = {},
     onSplitMemberPaidToggle: (SplitMemberEntity) -> Unit,
     onOpenDetail: (LedgerRow) -> Unit,
     showActionButtons: Boolean = false,
@@ -233,6 +236,8 @@ fun LedgerScreen(
                     row = row,
                     onEdit = { onEdit(row.transaction) },
                     onDeleteRequest = { onDeleteRequest(row.transaction) },
+                    onConfirmPendingFixed = { onConfirmPendingFixed(row) },
+                    onDiscardPendingFixed = { onDiscardPendingFixed(row) },
                     onSplitMemberPaidToggle = onSplitMemberPaidToggle,
                     onOpenDetail = { onOpenDetail(row) },
                     showActionButtons = true,
@@ -242,6 +247,8 @@ fun LedgerScreen(
                 TradeTransactionRow(
                     row = row,
                     onOpenDetail = { onOpenDetail(row) },
+                    onConfirmPendingFixed = { onConfirmPendingFixed(row) },
+                    onDiscardPendingFixed = { onDiscardPendingFixed(row) },
                     onSplitMemberPaidToggle = onSplitMemberPaidToggle,
                 )
             }
@@ -401,6 +408,8 @@ private fun LedgerTransactionCard(
     row: LedgerRow,
     onEdit: () -> Unit,
     onDeleteRequest: () -> Unit,
+    onConfirmPendingFixed: () -> Unit,
+    onDiscardPendingFixed: () -> Unit,
     onSplitMemberPaidToggle: (SplitMemberEntity) -> Unit,
     onOpenDetail: () -> Unit,
     showActionButtons: Boolean,
@@ -410,6 +419,7 @@ private fun LedgerTransactionCard(
     val type = TransactionType.fromKey(tx.type)
     val dateStr = formatExpectedDate(tx.expectedDate)
     val pendingFixed = type.isFixed && !tx.isConfirmed
+    var showPendingConfirmDialog by rememberSaveable(tx.id) { mutableStateOf(false) }
     val modifier = Modifier
         .fillMaxWidth()
         .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -426,6 +436,7 @@ private fun LedgerTransactionCard(
     val hasMemo = !tx.memo.isNullOrBlank()
     val splitDone = isSplitComplete(members)
     val containerColor = when {
+        pendingFixed -> Color(0xFFEAF4FF)
         isSplit && splitDone -> Color(0xFFE9FFF3)
         isSplit -> Color(0xFFF4EEFF)
         hasMemo -> Color(0xFFFFF9DB)
@@ -434,7 +445,9 @@ private fun LedgerTransactionCard(
     }
 
     Card(
-        modifier = modifier.clickable(onClick = onOpenDetail),
+        modifier = modifier.clickable {
+            if (pendingFixed) showPendingConfirmDialog = true else onOpenDetail()
+        },
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
@@ -572,6 +585,29 @@ private fun LedgerTransactionCard(
                 }
             }
         }
+    }
+    if (showPendingConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showPendingConfirmDialog = false },
+            title = { Text("고정거래 적용") },
+            text = { Text("해당 금액을 적용하겠습니까?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showPendingConfirmDialog = false
+                        onConfirmPendingFixed()
+                    }
+                ) { Text("Yes") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showPendingConfirmDialog = false
+                        onDiscardPendingFixed()
+                    }
+                ) { Text("No") }
+            },
+        )
     }
 }
 

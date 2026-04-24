@@ -62,6 +62,8 @@ fun TradeScreen(
     installmentSummary: InstallmentSummary,
     onAddClick: () -> Unit,
     onOpenDetail: (LedgerRow) -> Unit,
+    onConfirmPendingFixed: (LedgerRow) -> Unit = {},
+    onDiscardPendingFixed: (LedgerRow) -> Unit = {},
     onSplitMemberPaidToggle: (SplitMemberEntity) -> Unit,
     onInstallmentPaidToggle: (InstallmentPaymentEntity) -> Unit,
     onOpenAllTransactions: () -> Unit,
@@ -300,6 +302,8 @@ fun TradeScreen(
                     TradeTransactionRow(
                         row = row,
                         onOpenDetail = { onOpenDetail(row) },
+                        onConfirmPendingFixed = { onConfirmPendingFixed(row) },
+                        onDiscardPendingFixed = { onDiscardPendingFixed(row) },
                         onSplitMemberPaidToggle = onSplitMemberPaidToggle,
                         onInstallmentPaidToggle = onInstallmentPaidToggle,
                     )
@@ -345,6 +349,8 @@ private fun FilterChip(
 internal fun TradeTransactionRow(
     row: LedgerRow,
     onOpenDetail: () -> Unit,
+    onConfirmPendingFixed: () -> Unit = {},
+    onDiscardPendingFixed: () -> Unit = {},
     onSplitMemberPaidToggle: (SplitMemberEntity) -> Unit,
     onInstallmentPaidToggle: (InstallmentPaymentEntity) -> Unit = {},
     selectionMode: Boolean = false,
@@ -363,7 +369,10 @@ internal fun TradeTransactionRow(
     val installmentRemaining = row.installmentRemainingAmount
     val installmentTotalCount = row.installmentTotalCount
     val splitDone = isSplitComplete(members)
+    val pendingFixed = type.isFixed && !tx.isConfirmed
+    var showPendingConfirmDialog by rememberSaveable(tx.id) { mutableStateOf(false) }
     val baseColor = when {
+        pendingFixed -> Color(0xFFEAF4FF)
         hasInstallment -> Color(0xFFFFF1F1)
         isSplit && splitDone -> Color(0xFFE9FFF3)
         isSplit -> Color(0xFFF4EEFF)
@@ -375,7 +384,13 @@ internal fun TradeTransactionRow(
         else -> baseColor
     }
     val onMainRowClick: () -> Unit = {
-        if (selectionMode) onToggleSelect?.invoke() else onOpenDetail()
+        if (selectionMode) {
+            onToggleSelect?.invoke()
+        } else if (pendingFixed) {
+            showPendingConfirmDialog = true
+        } else {
+            onOpenDetail()
+        }
     }
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -462,6 +477,29 @@ internal fun TradeTransactionRow(
                 )
             }
         }
+    }
+    if (showPendingConfirmDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showPendingConfirmDialog = false },
+            title = { Text("고정거래 적용") },
+            text = { Text("해당 금액을 적용하겠습니까?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showPendingConfirmDialog = false
+                        onConfirmPendingFixed()
+                    }
+                ) { Text("Yes") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showPendingConfirmDialog = false
+                        onDiscardPendingFixed()
+                    }
+                ) { Text("No") }
+            },
+        )
     }
 }
 

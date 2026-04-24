@@ -23,6 +23,8 @@ interface TransactionRepository {
     suspend fun deleteTransaction(transaction: TransactionEntity)
 
     suspend fun deleteTransactions(transactions: List<TransactionEntity>)
+    suspend fun confirmFixedTransaction(transactionId: Long)
+    suspend fun discardPendingFixedTransaction(transactionId: Long)
 
     suspend fun getSplitMembers(transactionId: Long): List<SplitMemberEntity>
 

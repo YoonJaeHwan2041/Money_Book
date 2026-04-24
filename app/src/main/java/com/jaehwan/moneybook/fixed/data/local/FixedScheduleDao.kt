@@ -44,4 +44,15 @@ interface FixedScheduleDao {
         """
     )
     fun observeMonthlyExpectedExpense(yearMonth: String): Flow<Int>
+
+    @Query(
+        """
+        SELECT COALESCE(SUM(amount), 0) FROM fixed_schedule
+        WHERE is_active = 1
+        AND kind = :kind
+        AND start_year_month <= :yearMonth
+        AND (end_year_month IS NULL OR end_year_month >= :yearMonth)
+        """
+    )
+    fun observeMonthlyExpectedByKind(yearMonth: String, kind: String): Flow<Int>
 }

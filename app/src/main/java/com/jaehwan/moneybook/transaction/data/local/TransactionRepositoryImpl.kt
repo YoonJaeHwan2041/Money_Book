@@ -57,6 +57,14 @@ class TransactionRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun confirmFixedTransaction(transactionId: Long) {
+        transactionDao.confirmPendingFixedTransaction(transactionId)
+    }
+
+    override suspend fun discardPendingFixedTransaction(transactionId: Long) {
+        transactionDao.deletePendingFixedTransaction(transactionId)
+    }
+
     override suspend fun getSplitMembers(transactionId: Long): List<SplitMemberEntity> =
         splitMemberDao.getMembersByTransactionId(transactionId)
 

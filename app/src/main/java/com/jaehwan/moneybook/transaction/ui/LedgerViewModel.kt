@@ -132,6 +132,18 @@ class LedgerViewModel @Inject constructor(
         }
     }
 
+    fun confirmFixedTransaction(transactionId: Long) {
+        viewModelScope.launch {
+            transactionRepository.confirmFixedTransaction(transactionId)
+        }
+    }
+
+    fun discardPendingFixedTransaction(transactionId: Long) {
+        viewModelScope.launch {
+            transactionRepository.discardPendingFixedTransaction(transactionId)
+        }
+    }
+
     fun insertSplit(transaction: TransactionEntity, members: List<SplitMemberEntity>) {
         viewModelScope.launch {
             transactionRepository.insertSplit(transaction, members)
