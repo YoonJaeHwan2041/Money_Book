@@ -13,6 +13,9 @@ interface CategoryDao {
     @Query("SELECT * FROM category ORDER BY is_default DESC, name ASC")
     fun getAllCategories(): Flow<List<CategoryEntity>>
 
+    @Query("SELECT * FROM category ORDER BY id ASC")
+    suspend fun getAllCategoriesOnce(): List<CategoryEntity>
+
     @Query("SELECT * FROM category WHERE id = :id")
     suspend fun getCategoryById(id: Long): CategoryEntity?
 
@@ -33,4 +36,10 @@ interface CategoryDao {
 
     @Delete
     suspend fun deleteCategory(category: CategoryEntity)
+
+    @Query("DELETE FROM category")
+    suspend fun deleteAllCategories()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertCategories(categories: List<CategoryEntity>)
 }

@@ -3,6 +3,8 @@ package com.jaehwan.moneybook.ui.root
 import android.app.Activity
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
@@ -42,6 +44,7 @@ import com.jaehwan.moneybook.category.data.local.CategoryEntity
 import com.jaehwan.moneybook.category.ui.CategoryFormDialog
 import com.jaehwan.moneybook.category.ui.CategoryList
 import com.jaehwan.moneybook.category.ui.CategoryViewModel
+import com.jaehwan.moneybook.backup.ui.BackupViewModel
 import com.jaehwan.moneybook.fixed.ui.FixedManagementScreen
 import com.jaehwan.moneybook.fixed.ui.FixedViewModel
 import com.jaehwan.moneybook.splitmember.ui.SplitEditorScreen
@@ -65,6 +68,7 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
     val context = LocalContext.current
     val ledgerViewModel: LedgerViewModel = hiltViewModel()
     val fixedViewModel: FixedViewModel = hiltViewModel()
+    val backupViewModel: BackupViewModel = hiltViewModel()
     val categories by viewModel.categories.collectAsState()
     val ledgerRows by ledgerViewModel.ledgerRows.collectAsState()
     val installmentSummary by ledgerViewModel.installmentSummary.collectAsState()
@@ -95,6 +99,7 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
     var showSplitEditor by remember { mutableStateOf(false) }
     var splitEditorTransaction by remember { mutableStateOf<TransactionEntity?>(null) }
     var splitPrefill by remember { mutableStateOf<Triple<Int, Long, String?>?>(null) }
+    var showBackupRestoreConfirm by remember { mutableStateOf(false) }
     var selectedDetailTransactionId by remember { mutableStateOf<Long?>(null) }
     val selectedDetailRow = selectedDetailTransactionId?.let { selectedId ->
         ledgerRows.firstOrNull { it.transaction.id == selectedId }
@@ -121,9 +126,30 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
     }
     val monthlyExpectedFixedExpense by fixedViewModel.observeMonthlyExpectedExpense(nowYearMonth).collectAsState(0)
     val monthlySpentFixedExpense by fixedViewModel.observeMonthlySpentExpense(monthStart, monthEnd).collectAsState(0)
+    val backupState by backupViewModel.state.collectAsState()
+
+    val backupCreateLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            backupViewModel.exportTo(uri)
+        }
+    }
+    val backupOpenLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            backupViewModel.importFrom(uri)
+        }
+    }
 
     LaunchedEffect(Unit) {
         fixedViewModel.syncDueSchedules()
+    }
+    LaunchedEffect(backupState.message) {
+        val message = backupState.message ?: return@LaunchedEffect
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        backupViewModel.clearMessage()
     }
 
     BackHandler {
@@ -327,6 +353,13 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                         SettingsScreen(
                             onOpenCategoryManager = { settingsSection = SettingsSection.CategoryManager },
                             onOpenLegacyTrade = { settingsSection = SettingsSection.LegacyLedger },
+                            onBackupExport = {
+                                backupCreateLauncher.launch("moneybook_backup_${System.currentTimeMillis()}.json")
+                            },
+                            onBackupImport = {
+                                showBackupRestoreConfirm = true
+                            },
+                            backupLoading = backupState.isLoading,
                         )
                     }
                 }
@@ -528,6 +561,29 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
                 )
             }
 
+            if (showBackupRestoreConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showBackupRestoreConfirm = false },
+                    title = { Text("백업 복원") },
+                    text = { Text("현재 데이터가 백업 파일로 교체됩니다. 계속할까요?") },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showBackupRestoreConfirm = false
+                                backupOpenLauncher.launch(arrayOf("application/json", "text/plain"))
+                            }
+                        ) {
+                            Text("복원 진행")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showBackupRestoreConfirm = false }) {
+                            Text("취소")
+                        }
+                    },
+                )
+            }
+
             selectedDetailRow?.let { detailRow ->
                 TransactionDetailScreen(
                     row = detailRow,
@@ -562,6 +618,9 @@ fun MoneyBookApp(viewModel: CategoryViewModel = hiltViewModel()) {
 private fun SettingsScreen(
     onOpenCategoryManager: () -> Unit,
     onOpenLegacyTrade: () -> Unit,
+    onBackupExport: () -> Unit,
+    onBackupImport: () -> Unit,
+    backupLoading: Boolean,
 ) {
     Column(
         modifier = Modifier
@@ -584,6 +643,20 @@ private fun SettingsScreen(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("거래 내용 (이전 가계부)")
+        }
+        FilledTonalButton(
+            onClick = onBackupExport,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !backupLoading,
+        ) {
+            Text(if (backupLoading) "처리 중..." else "데이터 백업 내보내기")
+        }
+        FilledTonalButton(
+            onClick = onBackupImport,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !backupLoading,
+        ) {
+            Text(if (backupLoading) "처리 중..." else "백업 파일 복원")
         }
     }
 }

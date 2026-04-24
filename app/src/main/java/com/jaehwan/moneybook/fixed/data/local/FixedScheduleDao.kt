@@ -13,6 +13,9 @@ interface FixedScheduleDao {
     @Query("SELECT * FROM fixed_schedule ORDER BY day_of_month ASC, id DESC")
     fun getAllSchedules(): Flow<List<FixedScheduleEntity>>
 
+    @Query("SELECT * FROM fixed_schedule ORDER BY id ASC")
+    suspend fun getAllSchedulesOnce(): List<FixedScheduleEntity>
+
     @Query("SELECT * FROM fixed_schedule WHERE is_active = 1")
     suspend fun getActiveSchedules(): List<FixedScheduleEntity>
 
@@ -24,6 +27,12 @@ interface FixedScheduleDao {
 
     @Delete
     suspend fun deleteSchedule(schedule: FixedScheduleEntity)
+
+    @Query("DELETE FROM fixed_schedule")
+    suspend fun deleteAllSchedules()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertSchedules(schedules: List<FixedScheduleEntity>)
 
     @Query(
         """

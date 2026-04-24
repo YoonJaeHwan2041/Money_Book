@@ -12,8 +12,14 @@ interface InstallmentDao {
     @Query("SELECT * FROM installment_plan")
     fun getAllPlans(): Flow<List<InstallmentPlanEntity>>
 
+    @Query("SELECT * FROM installment_plan ORDER BY id ASC")
+    suspend fun getAllPlansOnce(): List<InstallmentPlanEntity>
+
     @Query("SELECT * FROM installment_payment ORDER BY due_date ASC, sequence_no ASC")
     fun getAllPayments(): Flow<List<InstallmentPaymentEntity>>
+
+    @Query("SELECT * FROM installment_payment ORDER BY id ASC")
+    suspend fun getAllPaymentsOnce(): List<InstallmentPaymentEntity>
 
     @Query(
         """
@@ -67,6 +73,9 @@ interface InstallmentDao {
     suspend fun insertPlan(plan: InstallmentPlanEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPlans(plans: List<InstallmentPlanEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPayments(payments: List<InstallmentPaymentEntity>)
 
     @Update
@@ -77,4 +86,10 @@ interface InstallmentDao {
 
     @Query("DELETE FROM installment_payment WHERE plan_id = :planId")
     suspend fun deletePaymentsByPlanId(planId: Long)
+
+    @Query("DELETE FROM installment_payment")
+    suspend fun deleteAllPayments()
+
+    @Query("DELETE FROM installment_plan")
+    suspend fun deleteAllPlans()
 }

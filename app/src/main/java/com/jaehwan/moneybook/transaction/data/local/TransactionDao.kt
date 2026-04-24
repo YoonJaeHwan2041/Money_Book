@@ -14,6 +14,9 @@ interface TransactionDao {
     @Query("SELECT * FROM `transaction` ORDER BY created_at DESC")
     fun getAllTransactions(): Flow<List<TransactionEntity>>
 
+    @Query("SELECT * FROM `transaction` ORDER BY id ASC")
+    suspend fun getAllTransactionsOnce(): List<TransactionEntity>
+
     @Query("SELECT * FROM `transaction` WHERE created_at BETWEEN :start AND :end ORDER BY created_at DESC")
     fun getTransactionsByPeriod(start: Long, end: Long): Flow<List<TransactionEntity>>
 
@@ -55,4 +58,10 @@ interface TransactionDao {
 
     @Delete
     suspend fun deleteTransaction(transaction: TransactionEntity)
+
+    @Query("DELETE FROM `transaction`")
+    suspend fun deleteAllTransactions()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertTransactions(transactions: List<TransactionEntity>)
 }

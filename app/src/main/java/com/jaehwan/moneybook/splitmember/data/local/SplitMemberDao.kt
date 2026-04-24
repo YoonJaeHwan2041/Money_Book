@@ -14,6 +14,9 @@ interface SplitMemberDao {
     @Query("SELECT * FROM split_member ORDER BY transaction_id, is_primary_payer DESC, id ASC")
     fun getAllMembers(): Flow<List<SplitMemberEntity>>
 
+    @Query("SELECT * FROM split_member ORDER BY id ASC")
+    suspend fun getAllMembersOnce(): List<SplitMemberEntity>
+
     @Query("SELECT * FROM split_member WHERE transaction_id = :transactionId ORDER BY is_primary_payer DESC, id ASC")
     fun observeMembers(transactionId: Long): Flow<List<SplitMemberEntity>>
 
@@ -31,4 +34,7 @@ interface SplitMemberDao {
 
     @Delete
     suspend fun deleteMember(member: SplitMemberEntity)
+
+    @Query("DELETE FROM split_member")
+    suspend fun deleteAllMembers()
 }
